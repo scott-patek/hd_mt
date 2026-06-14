@@ -250,11 +250,11 @@ class MainWindow(QMainWindow):
         settings_layout.setSpacing(8)
         self.peak_hold_toggle = QCheckBox("Peak Hold")
         self.peak_hold_toggle.setChecked(True)
-        self.max_peak_toggle = QCheckBox("Max Peak")
+        self.max_peak_toggle = QCheckBox("Peak Max")
         self.max_peak_toggle.setChecked(True)
-        self.avg_peaks_toggle = QCheckBox("Genre Avg Peak")
+        self.avg_peaks_toggle = QCheckBox("Peak Avg")
         self.avg_peaks_toggle.setChecked(True)
-        self.house_curve_toggle = QCheckBox("Peak Curve")
+        self.house_curve_toggle = QCheckBox("Genre Curve Peak")
         self.house_curve_toggle.setChecked(True)
         self.genre_combo = QComboBox()
         for genre_key, genre_name in list_genres():
@@ -338,8 +338,8 @@ class MainWindow(QMainWindow):
         settings_layout.addWidget(QLabel("True-Peak Ceiling (dBTP)"))
         settings_layout.addWidget(self.tp_spin)
         settings_layout.addSpacing(8)
-        self._add_toggle_with_hint(settings_layout, self.peak_hold_toggle, "#ffd84d", "solid")
         self._add_toggle_with_hint(settings_layout, self.house_curve_toggle, "#ff9e64", "dashed")
+        self._add_toggle_with_hint(settings_layout, self.peak_hold_toggle, "#ffd84d", "solid")
         self._add_toggle_with_hint(settings_layout, self.max_peak_toggle, "#ff4d4f", "solid")
         self._add_toggle_with_hint(settings_layout, self.avg_peaks_toggle, "#2e89ff", "solid")
 
@@ -752,18 +752,26 @@ class MainWindow(QMainWindow):
             self.file_box.setVisible(True)
             self.playback_box.setTitle("Playback")
             self.seek_slider.setEnabled(True)
+            self.pause_btn.setVisible(True)
             self.pause_btn.setEnabled(True)
             self.mode_status_label.setText("")
             self.mode_import_btn.setChecked(True)
+            active_track = self._active_track()
+            if active_track is not None:
+                self.metrics = MetricsEngine(active_track.samplerate)
+                self._configure_spectrum_analyzers(active_track.samplerate)
         else:  # live
             self._connect_source(self._live)
             self.file_box.setVisible(False)
             self.playback_box.setTitle("Capture")
             self.seek_slider.setEnabled(False)
+            self.pause_btn.setVisible(False)
             self.pause_btn.setEnabled(False)
             self.mode_status_label.setText("Ready")
             self.mode_live_btn.setChecked(True)
             self._reset_analysis_state(clear_history=True)
+            self.metrics = MetricsEngine(LIVE_SAMPLERATE)
+            self._configure_spectrum_analyzers(LIVE_SAMPLERATE)
             self._reset_suggestion_history("Live input mode. Press Play to start listening.")
             self._set_time_label(0.0, 0.0)
 
@@ -771,16 +779,16 @@ class MainWindow(QMainWindow):
     # Live-specific helpers
     # ------------------------------------------------------------------
 
-    def _activate_live_input(self) -> None:
-        """Initialize spectrum analyzers and X ranges for 48 kHz live input."""
+    def _configure_spectrum_analyzers(self, samplerate: int) -> None:
+        """Configure spectrum analyzers and target curves for the provided sample rate."""
         self.spectrum_low = SpectrumAnalyzer(
-            LIVE_SAMPLERATE, display_min_hz=20.0, display_max_hz=300.0, group_hz=10.0
+            samplerate, display_min_hz=20.0, display_max_hz=300.0, group_hz=10.0
         )
         self.spectrum_mid = SpectrumAnalyzer(
-            LIVE_SAMPLERATE, display_min_hz=300.0, display_max_hz=4000.0, group_hz=50.0
+            samplerate, display_min_hz=300.0, display_max_hz=4000.0, group_hz=50.0
         )
         self.spectrum_high = SpectrumAnalyzer(
-            LIVE_SAMPLERATE, display_min_hz=4000.0, display_max_hz=20000.0, group_hz=500.0
+            samplerate, display_min_hz=4000.0, display_max_hz=20000.0, group_hz=500.0
         )
         self.spectrum_plot_low.setXRange(20.0, 300.0)
         self.spectrum_plot_mid.setXRange(300.0, 4000.0)
@@ -790,6 +798,10 @@ class MainWindow(QMainWindow):
         self.target_curve_mid = self._build_house_target_curve(self.spectrum_mid.band_centers, genre_key)
         self.target_curve_high = self._build_house_target_curve(self.spectrum_high.band_centers, genre_key)
         self._update_target_curve_visibility(self.house_curve_toggle.isChecked())
+
+    def _activate_live_input(self) -> None:
+        """Initialize spectrum analyzers and X ranges for 48 kHz live input."""
+        self._configure_spectrum_analyzers(LIVE_SAMPLERATE)
 
     def _on_live_state_changed(self, state: str) -> None:
         """Update the status label from LiveInputCapture.state_changed signal."""
@@ -1103,18 +1115,7 @@ class MainWindow(QMainWindow):
 
     def _activate_track(self, track: AudioTrack) -> None:
         self.metrics = MetricsEngine(track.samplerate)
-        # Create three separate spectrum analyzers for low, mid, and high frequencies
-        self.spectrum_low = SpectrumAnalyzer(track.samplerate, display_min_hz=20.0, display_max_hz=300.0, group_hz=10.0)
-        self.spectrum_mid = SpectrumAnalyzer(track.samplerate, display_min_hz=300.0, display_max_hz=4000.0, group_hz=50.0)
-        self.spectrum_high = SpectrumAnalyzer(track.samplerate, display_min_hz=4000.0, display_max_hz=20000.0, group_hz=500.0)
-        self.spectrum_plot_low.setXRange(20.0, 300.0)
-        self.spectrum_plot_mid.setXRange(300.0, 4000.0)
-        self.spectrum_plot_high.setXRange(4000.0, 20000.0)
-        genre_key = self.genre_combo.currentData() or "house"
-        self.target_curve_low = self._build_house_target_curve(self.spectrum_low.band_centers, genre_key)
-        self.target_curve_mid = self._build_house_target_curve(self.spectrum_mid.band_centers, genre_key)
-        self.target_curve_high = self._build_house_target_curve(self.spectrum_high.band_centers, genre_key)
-        self._update_target_curve_visibility(self.house_curve_toggle.isChecked())
+        self._configure_spectrum_analyzers(track.samplerate)
         self.last_snapshot = None
         self.last_chunk_mono = np.zeros(4096, dtype=np.float32)
 

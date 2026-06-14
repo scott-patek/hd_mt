@@ -14,8 +14,8 @@ LIVE_SAMPLERATE: int = 48_000
 LIVE_CHANNELS: int = 2
 #: Block size in frames (~42 ms at 48 kHz).
 LIVE_BLOCK_SIZE: int = 2_048
-#: RMS threshold to transition LISTENING → CAPTURING (~-40 dBFS).
-LIVE_THRESHOLD_RMS: float = 0.01
+#: RMS threshold to transition LISTENING → CAPTURING (~-50 dBFS).
+LIVE_THRESHOLD_RMS: float = 0.003
 
 
 class LiveInputCapture(QObject):
@@ -40,6 +40,7 @@ class LiveInputCapture(QObject):
         self._state: str = "idle"
         self._stream: sd.InputStream | None = None
         self._elapsed_s: float = 0.0
+        self._capture_channels: int = LIVE_CHANNELS
 
         # Thread-safe queue: audio thread appends, main thread drains.
         self._chunk_queue: collections.deque[np.ndarray] = collections.deque(maxlen=128)
@@ -67,19 +68,29 @@ class LiveInputCapture(QObject):
         self._elapsed_s = 0.0
         self._chunk_queue.clear()
         self._pending_capturing = False
-        try:
-            self._stream = sd.InputStream(
-                samplerate=LIVE_SAMPLERATE,
-                channels=LIVE_CHANNELS,
-                dtype="float32",
-                blocksize=LIVE_BLOCK_SIZE,
-                callback=self._sd_callback,
-            )
-            self._stream.start()
-        except Exception as exc:
-            self._stream = None
-            self.playback_error.emit(str(exc))
+        open_errors: list[str] = []
+        self._stream = None
+        for channels in (LIVE_CHANNELS, 1):
+            try:
+                self._stream = sd.InputStream(
+                    samplerate=LIVE_SAMPLERATE,
+                    channels=channels,
+                    dtype="float32",
+                    blocksize=LIVE_BLOCK_SIZE,
+                    callback=self._sd_callback,
+                )
+                self._stream.start()
+                self._capture_channels = channels
+                break
+            except Exception as exc:
+                open_errors.append(f"{channels}ch: {exc}")
+                self._stream = None
+
+        if self._stream is None:
+            detail = " | ".join(open_errors) if open_errors else "unknown input stream error"
+            self.playback_error.emit(f"Could not open live input stream ({detail}).")
             return
+
         self._state = "listening"
         self._drain_timer.start()
         self.state_changed.emit("listening")
@@ -113,15 +124,24 @@ class LiveInputCapture(QObject):
         time_info: object,
         status: sd.CallbackFlags,
     ) -> None:
+        if status:
+            self.playback_error.emit(str(status))
+
+        if self._state not in ("listening", "capturing"):
+            return
+
+        chunk = indata.copy()
+        self._chunk_queue.append(chunk)
+
+        mono = chunk.ravel() if chunk.ndim == 1 else np.mean(chunk, axis=1)
+        rms = float(np.sqrt(np.mean(mono * mono)))
+
         if self._state == "listening":
-            mono = indata[:, 0] if indata.ndim > 1 else indata.ravel()
-            rms = float(np.sqrt(np.mean(mono * mono)))
             if rms > LIVE_THRESHOLD_RMS:
                 self._state = "capturing"
+                self._elapsed_s = 0.0
                 self._pending_capturing = True
-                self._chunk_queue.append(indata.copy())
-        elif self._state == "capturing":
-            self._chunk_queue.append(indata.copy())
+        else:
             self._elapsed_s += frames / LIVE_SAMPLERATE
 
     # ------------------------------------------------------------------
@@ -134,11 +154,12 @@ class LiveInputCapture(QObject):
             self._pending_capturing = False
             self.state_changed.emit("capturing")
 
-        if self._state != "capturing":
+        if self._state == "idle":
             return
 
         while self._chunk_queue:
             chunk = self._chunk_queue.popleft()
             self.chunk_available.emit(chunk)
 
-        self.position_changed.emit(self._elapsed_s)
+        if self._state == "capturing":
+            self.position_changed.emit(self._elapsed_s)
