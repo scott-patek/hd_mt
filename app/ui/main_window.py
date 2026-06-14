@@ -270,7 +270,7 @@ class MainWindow(QMainWindow):
         field_style = (
             "QComboBox, QDoubleSpinBox {"
             "background: #0d1117;"
-            "border: 1px solid #30363d;"
+            "border: 1px solid #586273;"
             "border-radius: 4px;"
             "padding: 6px 10px;"
             "min-height: 26px;"
@@ -324,7 +324,7 @@ class MainWindow(QMainWindow):
             "}"
             "QComboBox QAbstractItemView {"
             "background: #0d1117;"
-            "border: 1px solid #30363d;"
+            "border: 1px solid #586273;"
             "padding: 4px;"
             "selection-background-color: #21262d;"
             "selection-color: #d0d7de;"
@@ -374,7 +374,7 @@ class MainWindow(QMainWindow):
 
         # Low frequency spectrum (20-300 Hz)
         self.spectrum_plot_low = pg.PlotWidget()
-        self.spectrum_plot_low.setBackground("#161b22")
+        self.spectrum_plot_low.setBackground("#1f2630")
         self._style_spectrum_plot(
             self.spectrum_plot_low,
             title="Low Spectrum (20-300 Hz)",
@@ -414,7 +414,7 @@ class MainWindow(QMainWindow):
 
         # Mid frequency spectrum (300-4000 Hz)
         self.spectrum_plot_mid = pg.PlotWidget()
-        self.spectrum_plot_mid.setBackground("#161b22")
+        self.spectrum_plot_mid.setBackground("#1f2630")
         self._style_spectrum_plot(
             self.spectrum_plot_mid,
             title="Mid Spectrum (300-4000 Hz)",
@@ -452,7 +452,7 @@ class MainWindow(QMainWindow):
 
         # High frequency spectrum (4000-20000 Hz)
         self.spectrum_plot_high = pg.PlotWidget()
-        self.spectrum_plot_high.setBackground("#161b22")
+        self.spectrum_plot_high.setBackground("#1f2630")
         self._style_spectrum_plot(
             self.spectrum_plot_high,
             title="High Spectrum (4000-20000 Hz)",
@@ -549,13 +549,13 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(
             """
             QMainWindow, QWidget {
-                background: #161b22;
+                background: #1f2630;
                 color: #d0d7de;
                 font-family: Menlo, SF Mono, monospace;
                 font-size: 12px;
             }
             QGroupBox {
-                border: 1px solid #30363d;
+                border: 1px solid #586273;
                 border-radius: 6px;
                 margin-top: 8px;
                 padding-top: 8px;
@@ -568,7 +568,7 @@ class MainWindow(QMainWindow):
             }
             QPushButton {
                 background: #21262d;
-                border: 1px solid #30363d;
+                border: 1px solid #586273;
                 border-radius: 4px;
                 padding: 6px 10px;
             }
@@ -576,9 +576,9 @@ class MainWindow(QMainWindow):
                 border-color: #58a6ff;
             }
             QPushButton#panelCloseButton {
-                background: #161b22;
+                background: #1f2630;
                 color: #ffffff;
-                border: 1px solid #30363d;
+                border: 1px solid #586273;
                 border-radius: 8px;
                 padding: 0;
                 font-size: 11px;
@@ -590,7 +590,7 @@ class MainWindow(QMainWindow):
             }
             QToolButton#modeBtnLeft, QToolButton#modeBtnRight {
                 background: #21262d;
-                border: 1px solid #30363d;
+                border: 1px solid #586273;
                 border-radius: 0;
                 padding: 4px 8px;
                 font-size: 10px;
@@ -619,8 +619,8 @@ class MainWindow(QMainWindow):
                 font-size: 11px;
             }
             QFrame#brandBadge {
-                background: #161b22;
-                border: 1px solid #30363d;
+                background: #1f2630;
+                border: 1px solid #586273;
                 border-radius: 8px;
             }
             QLabel#brandIcon {
@@ -645,10 +645,10 @@ class MainWindow(QMainWindow):
             }
             QTextEdit {
                 background: #0d1117;
-                border: 1px solid #30363d;
+                border: 1px solid #586273;
             }
             QSlider::groove:horizontal {
-                border: 1px solid #30363d;
+                border: 1px solid #586273;
                 height: 6px;
                 background: #0d1117;
             }
