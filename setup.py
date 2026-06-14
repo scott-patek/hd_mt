@@ -19,6 +19,7 @@ OPTIONS = {
         "CFBundleVersion": "1.0.0",
         "LSMinimumSystemVersion": "11.0",
         "NSHighResolutionCapable": True,
+        "NSMicrophoneUsageDescription": "This app needs microphone access for Live Input spectrum analysis and mastering guidance.",
     },
     "packages": [
         "numpy",
