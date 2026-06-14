@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import platform
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -18,6 +19,14 @@ except Exception:  # pragma: no cover
 
 AUDIO_EXTENSIONS = {".wav", ".flac", ".ogg", ".aiff", ".aif", ".mp3", ".m4a"}
 VIDEO_EXTENSIONS = {".mp4", ".mov", ".mkv", ".m4v"}
+
+
+def _ffmpeg_install_hint() -> str:
+    if platform.system() == "Darwin":
+        return "On macOS run: brew install ffmpeg"
+    if platform.system() == "Windows":
+        return "On Windows run: winget install ffmpeg (or choco install ffmpeg)"
+    return "Install ffmpeg and ensure it is available on your PATH"
 
 
 @dataclass
@@ -114,13 +123,11 @@ class AudioLoader:
             msg = exc.stderr.decode("utf-8", errors="ignore") if exc.stderr else str(exc)
             raise RuntimeError(
                 "Failed to extract audio from video. "
-                "If ffmpeg is missing on macOS, run: brew install ffmpeg\n"
+                f"{_ffmpeg_install_hint()}\n"
                 f"Details: {msg}"
             )
         except FileNotFoundError as exc:
-            raise RuntimeError(
-                "ffmpeg is not installed. On macOS run: brew install ffmpeg"
-            ) from exc
+            raise RuntimeError(f"ffmpeg is not installed. {_ffmpeg_install_hint()}") from exc
 
         self._temp_artifacts.append(output_path)
         return output_path

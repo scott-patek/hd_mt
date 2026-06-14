@@ -12,21 +12,52 @@ Python desktop app for objective mastering guidance with strong low-end safety c
 - Continuous coaching and manual Analyze report with trend history.
 - Optional reference track with level-matched A/B comparison.
 
-## macOS prerequisite
-Install ffmpeg if needed:
+## Prerequisites
 
+**Python 3.11+** — [Download](https://www.python.org/downloads/) if needed.
+
+**ffmpeg** — Install via your package manager:
+
+- **macOS:** `brew install ffmpeg`
+- **Windows:** `winget install ffmpeg` (or `choco install ffmpeg`)
+- **Linux:** `apt install ffmpeg` (or equivalent)
+
+## Quick Start
+
+### macOS / Linux
 ```bash
-brew install ffmpeg
+python3 run.py
 ```
 
-## Run
+Or make it executable once:
 ```bash
-make venv
-make install
-make run
+chmod +x run
+./run
 ```
 
-## Test
+### Windows
+```powershell
+python run.py
+```
+
+Or double-click `run.bat` in File Explorer.
+
+---
+
+## What the launcher does
+1. Creates/activates `.venv` (virtual environment)
+2. Installs Python dependencies from `requirements.txt`
+3. Verifies ffmpeg is available
+4. Launches the app from source
+
+## Testing
 ```bash
-make test
+# Create/activate venv and run tests
+python3 run.py --test
+
+# Or manually:
+python3 -m venv .venv
+source .venv/bin/activate  # macOS/Linux: .venv\Scripts\activate on Windows
+pip install -r requirements.txt
+pytest tests/ -q
 ```

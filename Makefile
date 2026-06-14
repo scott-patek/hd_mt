@@ -1,10 +1,21 @@
 PYTHON ?= python3
 VENV ?= .venv
-APP_NAME := Half Deaf Mastering Tool
-APP_BUNDLE := dist/$(APP_NAME).app
-APP_EXEC := $(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)
 
-.PHONY: help venv install run test clean
+ifeq ($(OS),Windows_NT)
+VENV_BIN := $(VENV)/Scripts
+PIP := $(VENV_BIN)/pip.exe
+PYTHON_BIN := $(VENV_BIN)/python.exe
+PYTEST := $(VENV_BIN)/pytest.exe
+FFMPEG_HINT := If ffmpeg is missing on Windows, run: winget install ffmpeg (or choco install ffmpeg)
+else
+VENV_BIN := $(VENV)/bin
+PIP := $(VENV_BIN)/pip
+PYTHON_BIN := $(VENV_BIN)/python
+PYTEST := $(VENV_BIN)/pytest
+FFMPEG_HINT := If ffmpeg is missing on macOS, run: brew install ffmpeg
+endif
+
+.PHONY: help venv install run windows_run test clean
 
 help:
 	@echo "Safe Mastering Assistant - Make targets"
@@ -17,9 +28,10 @@ help:
 	@echo "  make help        # show this message"
 	@echo "  make venv        # create .venv only"
 	@echo "  make install     # create .venv if needed and install deps"
+	@echo "  make windows_run # alias for make run"
 	@echo "  make clean       # remove .venv"
 	@echo ""
-	@echo "If ffmpeg is missing on macOS: brew install ffmpeg"
+	@echo "$(FFMPEG_HINT)"
 
 venv:
 	@command -v $(PYTHON) >/dev/null 2>&1 || (echo "Python not found: $(PYTHON). Try: make run PYTHON=python3" && exit 1)
@@ -32,18 +44,18 @@ venv:
 	fi
 
 install: venv
-	@test -x $(VENV)/bin/pip || (echo "Virtual environment is not valid. Remove $(VENV) and retry." && exit 1)
-	$(VENV)/bin/pip install --upgrade pip
-	$(VENV)/bin/pip install -r requirements.txt
-	@echo "If ffmpeg is missing on macOS, run: brew install ffmpeg"
+	@test -x $(PIP) || (echo "Virtual environment is not valid. Remove $(VENV) and retry." && exit 1)
+	$(PIP) install --upgrade pip
+	$(PIP) install -r requirements.txt
+	@echo "$(FFMPEG_HINT)"
 
 run: install
-	$(VENV)/bin/python setup.py py2app -A
-	@test -x "$(APP_EXEC)" || (echo "Expected executable not found: $(APP_EXEC)" && exit 1)
-	open "$(APP_BUNDLE)"
+	$(PYTHON_BIN) run_app.py
+
+windows_run: run
 
 test: install
-	$(VENV)/bin/pytest -q
+	PYTHONPATH=. $(PYTEST) -q
 
 clean:
 	rm -rf $(VENV)
