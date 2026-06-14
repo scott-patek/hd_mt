@@ -22,7 +22,10 @@ class LiveInputCapture(QObject):
     """Captures audio from the default system input in real time.
 
     Mirrors AudioPlayer's Qt signal API so MainWindow can swap sources
-    transparently.  There is no Pause — Stop resets capture.
+    transparently. There is no Pause — Stop resets capture.
+
+    When possible, opens a duplex stream and monitors captured input to the
+    default output so users can hear the live signal.
 
     State machine::
 
@@ -38,9 +41,10 @@ class LiveInputCapture(QObject):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._state: str = "idle"
-        self._stream: sd.InputStream | None = None
+        self._stream: sd.InputStream | sd.Stream | None = None
         self._elapsed_s: float = 0.0
         self._capture_channels: int = LIVE_CHANNELS
+        self._monitoring_enabled: bool = True
 
         # Thread-safe queue: audio thread appends, main thread drains.
         self._chunk_queue: collections.deque[np.ndarray] = collections.deque(maxlen=128)
@@ -71,19 +75,37 @@ class LiveInputCapture(QObject):
         open_errors: list[str] = []
         self._stream = None
         for channels in (LIVE_CHANNELS, 1):
+            # First try duplex monitoring (input -> output) so live mode is audible.
+            if self._monitoring_enabled:
+                try:
+                    self._stream = sd.Stream(
+                        samplerate=LIVE_SAMPLERATE,
+                        channels=(channels, channels),
+                        dtype="float32",
+                        blocksize=LIVE_BLOCK_SIZE,
+                        callback=self._sd_duplex_callback,
+                    )
+                    self._stream.start()
+                    self._capture_channels = channels
+                    break
+                except Exception as exc:
+                    open_errors.append(f"duplex {channels}ch: {exc}")
+                    self._stream = None
+
+            # Fallback to capture-only if duplex cannot be opened.
             try:
                 self._stream = sd.InputStream(
                     samplerate=LIVE_SAMPLERATE,
                     channels=channels,
                     dtype="float32",
                     blocksize=LIVE_BLOCK_SIZE,
-                    callback=self._sd_callback,
+                    callback=self._sd_input_callback,
                 )
                 self._stream.start()
                 self._capture_channels = channels
                 break
             except Exception as exc:
-                open_errors.append(f"{channels}ch: {exc}")
+                open_errors.append(f"input {channels}ch: {exc}")
                 self._stream = None
 
         if self._stream is None:
@@ -117,7 +139,7 @@ class LiveInputCapture(QObject):
     # PortAudio audio-thread callback — only queues data, no Qt calls
     # ------------------------------------------------------------------
 
-    def _sd_callback(
+    def _sd_input_callback(
         self,
         indata: np.ndarray,
         frames: int,
@@ -130,7 +152,37 @@ class LiveInputCapture(QObject):
         if self._state not in ("listening", "capturing"):
             return
 
+        self._process_captured_chunk(indata.copy(), frames)
+
+    def _sd_duplex_callback(
+        self,
+        indata: np.ndarray,
+        outdata: np.ndarray,
+        frames: int,
+        time_info: object,
+        status: sd.CallbackFlags,
+    ) -> None:
+        if status:
+            self.playback_error.emit(str(status))
+
+        outdata.fill(0.0)
+        if self._state not in ("listening", "capturing"):
+            return
+
         chunk = indata.copy()
+
+        # Monitor live input to speakers/headphones.
+        if chunk.ndim == 1:
+            outdata[:, 0] = chunk
+            if outdata.shape[1] > 1:
+                outdata[:, 1] = chunk
+        else:
+            ch = min(chunk.shape[1], outdata.shape[1])
+            outdata[:, :ch] = chunk[:, :ch]
+
+        self._process_captured_chunk(chunk, frames)
+
+    def _process_captured_chunk(self, chunk: np.ndarray, frames: int) -> None:
         self._chunk_queue.append(chunk)
 
         mono = chunk.ravel() if chunk.ndim == 1 else np.mean(chunk, axis=1)

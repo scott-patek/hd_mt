@@ -530,6 +530,7 @@ class MainWindow(QMainWindow):
         self.report_box.setVisible(False)
 
     def _build_view_menu(self) -> None:
+        self.menuBar().setNativeMenuBar(True)
         self.view_menu = self.menuBar().addMenu("View")
         self.toggle_safety_meters_action = QAction("Show Safety Meters", self)
         self.toggle_safety_meters_action.setCheckable(True)
