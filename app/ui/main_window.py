@@ -5,9 +5,10 @@ from pathlib import Path
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import QEvent, QTimer, Qt, QSize
-from PySide6.QtGui import QAction, QColor, QFont, QIcon
+from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (
     QSlider,
     QSizePolicy,
     QTextEdit,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -32,6 +34,7 @@ from app.analysis.metrics import AnalysisSnapshot, MetricsEngine
 from app.analysis.spectrum import SpectrumAnalyzer
 from app.analysis.genres import list_genres, get_genre
 from app.audio.audio_loader import AudioLoader, AudioTrack
+from app.audio.live_input import LiveInputCapture, LIVE_SAMPLERATE
 from app.audio.player import AudioPlayer
 from app.coaching.coach import SafeMasteringCoach
 
@@ -47,12 +50,14 @@ class MainWindow(QMainWindow):
 
         self.loader = AudioLoader()
         self.player = AudioPlayer(block_size=2048)
+        self._live = LiveInputCapture()
         self.coach = SafeMasteringCoach(true_peak_target_dbtp=-1.0)
         self.current_genre = get_genre("house")
 
         self.main_track: AudioTrack | None = None
         self.reference_track: AudioTrack | None = None
         self.active_mode = "A"
+        self._input_mode: str = "import"
 
         self.metrics: MetricsEngine | None = None
         self.spectrum_low: SpectrumAnalyzer | None = None
@@ -115,13 +120,20 @@ class MainWindow(QMainWindow):
         self.coaching_timer.start()
 
         self._reset_analysis_state(clear_history=True)
+        self._set_mode("import")
 
     def _build_ui(self) -> None:
         root = QWidget()
-        root_layout = QHBoxLayout(root)
-        root_layout.setContentsMargins(12, 12, 12, 12)
+        outer_layout = QVBoxLayout(root)
+        outer_layout.setContentsMargins(12, 6, 12, 12)
+        outer_layout.setSpacing(0)
+
+        content = QWidget()
+        root_layout = QHBoxLayout(content)
+        root_layout.setContentsMargins(0, 6, 0, 0)
         root_layout.setSpacing(6)
         self.root_layout = root_layout
+        outer_layout.addWidget(content, 1)
 
         left = QWidget()
         left_layout = QVBoxLayout(left)
@@ -129,6 +141,7 @@ class MainWindow(QMainWindow):
         left.setMaximumWidth(240)
 
         file_box = QGroupBox("Input & Reference")
+        self.file_box = file_box
         file_layout = QGridLayout(file_box)
         self.open_btn = QPushButton()
         self.open_btn.setIcon(QIcon(str(Path(__file__).resolve().parent / "assets" / "folder_open_white.svg")))
@@ -152,7 +165,15 @@ class MainWindow(QMainWindow):
         file_layout.addWidget(self.ref_label, 1, 1)
         file_layout.addWidget(self.ab_btn, 2, 0, 1, 2)
 
+        mode_box = QGroupBox("Mode")
+        mode_box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        mode_layout = QVBoxLayout(mode_box)
+        mode_layout.setContentsMargins(8, 6, 8, 8)
+        mode_layout.setSpacing(0)
+        mode_layout.addWidget(self._build_mode_bar())
+
         playback_box = QGroupBox("Playback")
+        self.playback_box = playback_box
         playback_box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
         playback_layout = QVBoxLayout(playback_box)
         row = QHBoxLayout()
@@ -322,10 +343,12 @@ class MainWindow(QMainWindow):
         self._add_toggle_with_hint(settings_layout, self.max_peak_toggle, "#ff4d4f", "solid")
         self._add_toggle_with_hint(settings_layout, self.avg_peaks_toggle, "#2e89ff", "solid")
 
+        left_layout.addWidget(mode_box)
         left_layout.addWidget(file_box)
         left_layout.addWidget(playback_box)
         left_layout.addWidget(settings_box)
         left_layout.addStretch(1)
+        left_layout.addWidget(self._build_brand_badge())
 
         center = QWidget()
         center_layout = QVBoxLayout(center)
@@ -564,6 +587,61 @@ class MainWindow(QMainWindow):
                 border-color: #58a6ff;
                 background: #21262d;
             }
+            QToolButton#modeBtnLeft, QToolButton#modeBtnRight {
+                background: #21262d;
+                border: 1px solid #30363d;
+                border-radius: 0;
+                padding: 4px 8px;
+                font-size: 10px;
+                color: #8b949e;
+            }
+            QToolButton#modeBtnLeft {
+                border-top-left-radius: 5px;
+                border-bottom-left-radius: 5px;
+            }
+            QToolButton#modeBtnRight {
+                border-top-right-radius: 5px;
+                border-bottom-right-radius: 5px;
+                border-left: none;
+            }
+            QToolButton#modeBtnLeft:checked, QToolButton#modeBtnRight:checked {
+                background: #388bfd;
+                border-color: #388bfd;
+                color: #ffffff;
+            }
+            QToolButton#modeBtnLeft:hover:!checked, QToolButton#modeBtnRight:hover:!checked {
+                border-color: #58a6ff;
+                color: #d0d7de;
+            }
+            QLabel#modeStatusLabel {
+                color: #8b949e;
+                font-size: 11px;
+            }
+            QFrame#brandBadge {
+                background: #161b22;
+                border: 1px solid #30363d;
+                border-radius: 8px;
+            }
+            QLabel#brandIcon {
+                background: transparent;
+            }
+            QLabel#brandTitle {
+                color: #d0d7de;
+                font-size: 11px;
+                font-weight: 700;
+                background: transparent;
+            }
+            QLabel#brandSubtitle {
+                color: #8b949e;
+                font-size: 10px;
+                background: transparent;
+            }
+            QLabel#brandStudio {
+                color: #58a6ff;
+                font-size: 9px;
+                font-weight: 600;
+                background: transparent;
+            }
             QTextEdit {
                 background: #0d1117;
                 border: 1px solid #30363d;
@@ -582,6 +660,152 @@ class MainWindow(QMainWindow):
             }
             """
         )
+
+    # ------------------------------------------------------------------
+    # Mode bar
+    # ------------------------------------------------------------------
+
+    def _build_mode_bar(self) -> QFrame:
+        """Build the segmented Import / Live Input control at the top of the window."""
+        bar = QFrame()
+        bar.setObjectName("modeBar")
+        layout = QVBoxLayout(bar)
+        layout.setContentsMargins(0, 4, 0, 0)
+        layout.setSpacing(3)
+
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(0, 0, 0, 0)
+        btn_row.setSpacing(0)
+
+        self.mode_import_btn = QToolButton()
+        self.mode_import_btn.setObjectName("modeBtnLeft")
+        self.mode_import_btn.setText("Import")
+        self.mode_import_btn.setCheckable(True)
+        self.mode_import_btn.setChecked(True)
+        self.mode_import_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        self.mode_live_btn = QToolButton()
+        self.mode_live_btn.setObjectName("modeBtnRight")
+        self.mode_live_btn.setText("Live Input")
+        self.mode_live_btn.setCheckable(True)
+        self.mode_live_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        self._mode_group = QButtonGroup(self)
+        self._mode_group.addButton(self.mode_import_btn, 0)
+        self._mode_group.addButton(self.mode_live_btn, 1)
+        self._mode_group.setExclusive(True)
+
+        self.mode_status_label = QLabel("")
+        self.mode_status_label.setObjectName("modeStatusLabel")
+
+        btn_row.addWidget(self.mode_import_btn)
+        btn_row.addWidget(self.mode_live_btn)
+        layout.addLayout(btn_row)
+        layout.addWidget(self.mode_status_label)
+        return bar
+
+    # ------------------------------------------------------------------
+    # Source connection helpers & mode switching
+    # ------------------------------------------------------------------
+
+    def _connect_source(self, src: object) -> None:
+        src.chunk_available.connect(self._on_chunk)
+        src.position_changed.connect(self._on_position)
+        src.playback_stopped.connect(self._on_playback_stopped)
+        src.playback_error.connect(self._on_playback_error)
+        if hasattr(src, "state_changed"):
+            src.state_changed.connect(self._on_live_state_changed)
+
+    def _disconnect_source(self, src: object) -> None:
+        for sig, slot in [
+            (src.chunk_available, self._on_chunk),
+            (src.position_changed, self._on_position),
+            (src.playback_stopped, self._on_playback_stopped),
+            (src.playback_error, self._on_playback_error),
+        ]:
+            try:
+                sig.disconnect(slot)
+            except RuntimeError:
+                pass
+        if hasattr(src, "state_changed"):
+            try:
+                src.state_changed.disconnect(self._on_live_state_changed)
+            except RuntimeError:
+                pass
+
+    def _set_mode(self, mode: str) -> None:
+        """Switch between 'import' and 'live' input modes."""
+        # Stop any active source when switching modes
+        if self._input_mode == "live":
+            self._live.stop()
+        elif self._input_mode == "import":
+            self.player.stop()
+
+        # Disconnect both sources (safe if not yet connected)
+        self._disconnect_source(self.player)
+        self._disconnect_source(self._live)
+
+        self._input_mode = mode
+
+        if mode == "import":
+            self._connect_source(self.player)
+            self.file_box.setVisible(True)
+            self.playback_box.setTitle("Playback")
+            self.seek_slider.setEnabled(True)
+            self.pause_btn.setEnabled(True)
+            self.mode_status_label.setText("")
+            self.mode_import_btn.setChecked(True)
+        else:  # live
+            self._connect_source(self._live)
+            self.file_box.setVisible(False)
+            self.playback_box.setTitle("Capture")
+            self.seek_slider.setEnabled(False)
+            self.pause_btn.setEnabled(False)
+            self.mode_status_label.setText("Ready")
+            self.mode_live_btn.setChecked(True)
+            self._reset_analysis_state(clear_history=True)
+            self._reset_suggestion_history("Live input mode. Press Play to start listening.")
+            self._set_time_label(0.0, 0.0)
+
+    # ------------------------------------------------------------------
+    # Live-specific helpers
+    # ------------------------------------------------------------------
+
+    def _activate_live_input(self) -> None:
+        """Initialize spectrum analyzers and X ranges for 48 kHz live input."""
+        self.spectrum_low = SpectrumAnalyzer(
+            LIVE_SAMPLERATE, display_min_hz=20.0, display_max_hz=300.0, group_hz=10.0
+        )
+        self.spectrum_mid = SpectrumAnalyzer(
+            LIVE_SAMPLERATE, display_min_hz=300.0, display_max_hz=4000.0, group_hz=50.0
+        )
+        self.spectrum_high = SpectrumAnalyzer(
+            LIVE_SAMPLERATE, display_min_hz=4000.0, display_max_hz=20000.0, group_hz=500.0
+        )
+        self.spectrum_plot_low.setXRange(20.0, 300.0)
+        self.spectrum_plot_mid.setXRange(300.0, 4000.0)
+        self.spectrum_plot_high.setXRange(4000.0, 20000.0)
+        genre_key = self.genre_combo.currentData() or "house"
+        self.target_curve_low = self._build_house_target_curve(self.spectrum_low.band_centers, genre_key)
+        self.target_curve_mid = self._build_house_target_curve(self.spectrum_mid.band_centers, genre_key)
+        self.target_curve_high = self._build_house_target_curve(self.spectrum_high.band_centers, genre_key)
+        self._update_target_curve_visibility(self.house_curve_toggle.isChecked())
+
+    def _on_live_state_changed(self, state: str) -> None:
+        """Update the status label from LiveInputCapture.state_changed signal."""
+        if state == "idle":
+            self.mode_status_label.setText("Ready")
+        elif state == "listening":
+            self.mode_status_label.setText("Waiting for input…")
+        elif state == "capturing":
+            self.mode_status_label.setText("Capturing")
+
+    @property
+    def _is_source_active(self) -> bool:
+        """True when audio is actively playing or being captured."""
+        if self._input_mode == "live":
+            return self._live.state == "capturing"
+        return self.player.state.is_playing
 
     def _install_panel_close_button(self, box: QGroupBox, on_hide: callable) -> None:
         close_btn = QPushButton("X", box)
@@ -665,6 +889,48 @@ class MainWindow(QMainWindow):
         layout.setSpacing(0)
         layout.addWidget(plot)
         return box
+
+    def _build_brand_badge(self) -> QFrame:
+        """Build a professional lower-left brand badge with the app icon."""
+        badge = QFrame()
+        badge.setObjectName("brandBadge")
+        badge.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+
+        layout = QHBoxLayout(badge)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(8)
+
+        icon_label = QLabel()
+        icon_label.setObjectName("brandIcon")
+        icon_label.setFixedSize(QSize(50, 50))
+        icon_path = Path(__file__).resolve().parent / "assets" / "app_icon.png"
+        if icon_path.exists():
+            pixmap = QPixmap(str(icon_path)).scaled(
+                44,
+                44,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            icon_label.setPixmap(pixmap)
+
+        title_label = QLabel("Half Deaf")
+        title_label.setObjectName("brandTitle")
+        subtitle_label = QLabel("Mastering Tool")
+        subtitle_label.setObjectName("brandSubtitle")
+        studio_label = QLabel("Bad Shoes Studio")
+        studio_label.setObjectName("brandStudio")
+
+        text_col = QVBoxLayout()
+        text_col.setContentsMargins(0, 0, 0, 0)
+        text_col.setSpacing(0)
+        text_col.addWidget(title_label)
+        text_col.addWidget(subtitle_label)
+        text_col.addWidget(studio_label)
+
+        layout.addWidget(icon_label)
+        layout.addLayout(text_col)
+        layout.addStretch(1)
+        return badge
 
     def _add_toggle_with_hint(
         self,
@@ -756,10 +1022,9 @@ class MainWindow(QMainWindow):
         self.max_peak_toggle.toggled.connect(self._update_max_peak_visibility)
         self.avg_peaks_toggle.toggled.connect(self._update_avg_peak_visibility)
 
-        self.player.chunk_available.connect(self._on_chunk)
-        self.player.position_changed.connect(self._on_position)
-        self.player.playback_stopped.connect(self._on_playback_stopped)
-        self.player.playback_error.connect(self._on_playback_error)
+        self.mode_import_btn.clicked.connect(lambda: self._set_mode("import"))
+        self.mode_live_btn.clicked.connect(lambda: self._set_mode("live"))
+
         self.house_curve_toggle.toggled.connect(self._update_target_curve_visibility)
         self.spectrum_plot_low.scene().sigMouseMoved.connect(self._on_spectrum_low_mouse_moved)
         self.spectrum_plot_mid.scene().sigMouseMoved.connect(self._on_spectrum_mid_mouse_moved)
@@ -984,6 +1249,9 @@ class MainWindow(QMainWindow):
         self._update_meter_labels(snapshot)
 
     def _on_position(self, pos_s: float) -> None:
+        if self._input_mode == "live":
+            self._set_time_label(pos_s, 0.0)
+            return
         track = self._active_track()
         if track is None:
             return
@@ -1070,7 +1338,7 @@ class MainWindow(QMainWindow):
         self.last_spectrum_low_magnitudes = magnitudes_low
         self.last_spectrum_low_peaks = peak_magnitudes_low
         frame_peaks_low = np.maximum(magnitudes_low, peak_magnitudes_low)
-        if self.player.state.is_playing:
+        if self._is_source_active:
             if self.max_spectrum_low_peaks.size != frame_peaks_low.size:
                 self.max_spectrum_low_peaks = frame_peaks_low.copy()
             else:
@@ -1151,7 +1419,7 @@ class MainWindow(QMainWindow):
         self.last_spectrum_mid_magnitudes = magnitudes_mid
         self.last_spectrum_mid_peaks = peak_magnitudes_mid
         frame_peaks_mid = np.maximum(magnitudes_mid, peak_magnitudes_mid)
-        if self.player.state.is_playing:
+        if self._is_source_active:
             if self.max_spectrum_mid_peaks.size != frame_peaks_mid.size:
                 self.max_spectrum_mid_peaks = frame_peaks_mid.copy()
             else:
@@ -1230,7 +1498,7 @@ class MainWindow(QMainWindow):
         self.last_spectrum_high_magnitudes = magnitudes_high
         self.last_spectrum_high_peaks = peak_magnitudes_high
         frame_peaks_high = np.maximum(magnitudes_high, peak_magnitudes_high)
-        if self.player.state.is_playing:
+        if self._is_source_active:
             if self.max_spectrum_high_peaks.size != frame_peaks_high.size:
                 self.max_spectrum_high_peaks = frame_peaks_high.copy()
             else:
@@ -1301,6 +1569,9 @@ class MainWindow(QMainWindow):
         self.spectrum_plot_high.addItem(self.spectrum_max_caps_high)
 
     def _should_update_avg_peaks(self) -> bool:
+        if self._input_mode == "live":
+            return self._live.state == "capturing"
+
         if not self.player.state.is_playing:
             return False
 
@@ -1322,6 +1593,12 @@ class MainWindow(QMainWindow):
         self.spectrum_avg_peaks_curve_high.setVisible(visible)
 
     def _on_stop_clicked(self) -> None:
+        if self._input_mode == "live":
+            self._live.stop()
+            self.force_spectrum_silence = True
+            self.last_chunk_mono.fill(0.0)
+            self._reset_meter_histories()
+            return
         self.player.stop()
         if not self.max_peak_toggle.isChecked():
             self.max_spectrum_low_peaks = np.array([], dtype=np.float32)
@@ -1340,6 +1617,13 @@ class MainWindow(QMainWindow):
         self._reset_meter_histories()
 
     def _on_play_clicked(self) -> None:
+        if self._input_mode == "live":
+            self._activate_live_input()
+            self._reset_analysis_for_new_playback()
+            self._reset_suggestion_history("New live capture started. Listening for audio…")
+            self.force_spectrum_silence = False
+            self._live.play()
+            return
         if not self.player.state.is_playing:
             self._reset_suggestion_history(
                 "New playback run started. Timestamped coaching timeline restarted."
@@ -1354,10 +1638,13 @@ class MainWindow(QMainWindow):
         self.last_chunk_mono.fill(0.0)
 
     def _reset_analysis_for_new_playback(self) -> None:
-        """Start each playback run with fresh analysis metrics and overlays."""
-        track = self._active_track()
-        if track is not None:
-            self.metrics = MetricsEngine(track.samplerate)
+        """Start each playback/capture run with fresh analysis metrics and overlays."""
+        if self._input_mode == "live":
+            self.metrics = MetricsEngine(LIVE_SAMPLERATE)
+        else:
+            track = self._active_track()
+            if track is not None:
+                self.metrics = MetricsEngine(track.samplerate)
 
         if self.spectrum_low is not None:
             self.spectrum_low.reset_state()
@@ -1427,7 +1714,8 @@ class MainWindow(QMainWindow):
 
     def _append_suggestion_event(self, reason: str, actions: list[str]) -> None:
         """Append one timestamped coaching event to suggestion history."""
-        timestamp = self._fmt_time(self.player.state.position_s)
+        pos_s = self._live._elapsed_s if self._input_mode == "live" else self.player.state.position_s
+        timestamp = self._fmt_time(pos_s)
         lines = [f"[{timestamp}] {reason}"]
         for action in actions[:3]:
             lines.append(f"- {action}")
@@ -1440,7 +1728,7 @@ class MainWindow(QMainWindow):
         self.suggestion_panel.setPlainText("\n".join(self.suggestion_history_lines))
 
     def _update_continuous_coaching(self) -> None:
-        if self.last_snapshot is None or not self.player.state.is_playing:
+        if self.last_snapshot is None or not self._is_source_active:
             return
         report = self.coach.generate(
             self.last_snapshot,
@@ -1631,7 +1919,10 @@ class MainWindow(QMainWindow):
         return "Stable"
 
     def _set_time_label(self, current: float, duration: float) -> None:
-        self.time_label.setText(f"{self._fmt_time(current)} / {self._fmt_time(duration)}")
+        if duration > 0:
+            self.time_label.setText(f"{self._fmt_time(current)} / {self._fmt_time(duration)}")
+        else:
+            self.time_label.setText(self._fmt_time(current))
 
     def _fmt_time(self, seconds: float) -> str:
         total = int(max(seconds, 0))

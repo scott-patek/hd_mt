@@ -113,6 +113,13 @@ class MetricsEngine:
             mids_db=mids,
         )
 
+    def reset(self) -> None:
+        """Reset all accumulated metrics to initial state."""
+        self.lufs = LUFSMeter(self.samplerate)
+        self.total_samples = 0
+        self.max_sample_peak = 0.0
+        self.max_true_peak = 0.0
+
     def _to_db(self, v: float) -> float:
         return 20.0 * np.log10(max(v, 1e-9))
 
