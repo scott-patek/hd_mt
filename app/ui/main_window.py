@@ -561,11 +561,7 @@ class MainWindow(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                                             stop:0 #1b222c,
                                             stop:1 #171d26);
-                border: 1px solid #4a5667;
-                border-top-color: #121820;
-                border-left-color: #121820;
-                border-right-color: #6a7688;
-                border-bottom-color: #6a7688;
+                border: 1px solid #586273;
                 border-radius: 6px;
                 margin-top: 8px;
                 padding-top: 8px;
@@ -636,11 +632,7 @@ class MainWindow(QMainWindow):
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
                                             stop:0 #1c2330,
                                             stop:1 #18202b);
-                border: 1px solid #4a5667;
-                border-top-color: #121820;
-                border-left-color: #121820;
-                border-right-color: #6a7688;
-                border-bottom-color: #6a7688;
+                border: 1px solid #586273;
                 border-radius: 8px;
             }
             QLabel#brandIcon {
