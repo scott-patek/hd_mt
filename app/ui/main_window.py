@@ -555,7 +555,14 @@ class MainWindow(QMainWindow):
                 font-size: 12px;
             }
             QGroupBox {
-                border: 1px solid #586273;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                            stop:0 #1b222c,
+                                            stop:1 #171d26);
+                border: 1px solid #4a5667;
+                border-top-color: #121820;
+                border-left-color: #121820;
+                border-right-color: #6a7688;
+                border-bottom-color: #6a7688;
                 border-radius: 6px;
                 margin-top: 8px;
                 padding-top: 8px;
@@ -565,6 +572,9 @@ class MainWindow(QMainWindow):
                 subcontrol-origin: margin;
                 left: 8px;
                 padding: 0 4px;
+            }
+            QGroupBox QLabel, QGroupBox QCheckBox, QGroupBox QSlider {
+                background: transparent;
             }
             QPushButton {
                 background: #21262d;
@@ -619,8 +629,14 @@ class MainWindow(QMainWindow):
                 font-size: 11px;
             }
             QFrame#brandBadge {
-                background: #1f2630;
-                border: 1px solid #586273;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                            stop:0 #1c2330,
+                                            stop:1 #18202b);
+                border: 1px solid #4a5667;
+                border-top-color: #121820;
+                border-left-color: #121820;
+                border-right-color: #6a7688;
+                border-bottom-color: #6a7688;
                 border-radius: 8px;
             }
             QLabel#brandIcon {
@@ -645,7 +661,11 @@ class MainWindow(QMainWindow):
             }
             QTextEdit {
                 background: #0d1117;
-                border: 1px solid #586273;
+                border: 1px solid #465264;
+                border-top-color: #0b0f14;
+                border-left-color: #0b0f14;
+                border-right-color: #667285;
+                border-bottom-color: #667285;
             }
             QSlider::groove:horizontal {
                 border: 1px solid #586273;
@@ -960,6 +980,7 @@ class MainWindow(QMainWindow):
 
         dash = "dashed" if line_style == "dashed" else "solid"
         hint_container = QWidget()
+        hint_container.setStyleSheet("background: transparent;")
         hint_container.setFixedSize(34, 14)
         hint_container_layout = QVBoxLayout(hint_container)
         hint_container_layout.setContentsMargins(0, 0, 0, 0)
