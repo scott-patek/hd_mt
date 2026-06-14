@@ -270,7 +270,7 @@ class MainWindow(QMainWindow):
         field_style = (
             "QComboBox, QDoubleSpinBox {"
             "background: #0d1117;"
-            "border: 1px solid #30363d;"
+            "border: 1px solid #586273;"
             "border-radius: 4px;"
             "padding: 6px 10px;"
             "min-height: 26px;"
@@ -324,7 +324,7 @@ class MainWindow(QMainWindow):
             "}"
             "QComboBox QAbstractItemView {"
             "background: #0d1117;"
-            "border: 1px solid #30363d;"
+            "border: 1px solid #586273;"
             "padding: 4px;"
             "selection-background-color: #21262d;"
             "selection-color: #d0d7de;"
@@ -360,7 +360,7 @@ class MainWindow(QMainWindow):
         suggestion_layout = QVBoxLayout(self.suggestion_box)
         self.suggestion_panel = QTextEdit()
         self.suggestion_panel.setReadOnly(True)
-        self.suggestion_panel.setStyleSheet("font-size: 11px;")
+        self.suggestion_panel.setStyleSheet("font-size: 11px; border: none;")
         suggestion_layout.addWidget(self.suggestion_panel, 1)
         self.suggestion_box.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
@@ -374,7 +374,8 @@ class MainWindow(QMainWindow):
 
         # Low frequency spectrum (20-300 Hz)
         self.spectrum_plot_low = pg.PlotWidget()
-        self.spectrum_plot_low.setBackground("#161b22")
+        self.spectrum_plot_low.setBackground(None)
+        self.spectrum_plot_low.viewport().setAutoFillBackground(False)
         self._style_spectrum_plot(
             self.spectrum_plot_low,
             title="Low Spectrum (20-300 Hz)",
@@ -414,7 +415,8 @@ class MainWindow(QMainWindow):
 
         # Mid frequency spectrum (300-4000 Hz)
         self.spectrum_plot_mid = pg.PlotWidget()
-        self.spectrum_plot_mid.setBackground("#161b22")
+        self.spectrum_plot_mid.setBackground(None)
+        self.spectrum_plot_mid.viewport().setAutoFillBackground(False)
         self._style_spectrum_plot(
             self.spectrum_plot_mid,
             title="Mid Spectrum (300-4000 Hz)",
@@ -452,7 +454,8 @@ class MainWindow(QMainWindow):
 
         # High frequency spectrum (4000-20000 Hz)
         self.spectrum_plot_high = pg.PlotWidget()
-        self.spectrum_plot_high.setBackground("#161b22")
+        self.spectrum_plot_high.setBackground(None)
+        self.spectrum_plot_high.viewport().setAutoFillBackground(False)
         self._style_spectrum_plot(
             self.spectrum_plot_high,
             title="High Spectrum (4000-20000 Hz)",
@@ -549,13 +552,16 @@ class MainWindow(QMainWindow):
         self.setStyleSheet(
             """
             QMainWindow, QWidget {
-                background: #161b22;
+                background: #1f2630;
                 color: #d0d7de;
                 font-family: Menlo, SF Mono, monospace;
                 font-size: 12px;
             }
             QGroupBox {
-                border: 1px solid #30363d;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                            stop:0 #1b222c,
+                                            stop:1 #171d26);
+                border: 1px solid #586273;
                 border-radius: 6px;
                 margin-top: 8px;
                 padding-top: 8px;
@@ -566,9 +572,13 @@ class MainWindow(QMainWindow):
                 left: 8px;
                 padding: 0 4px;
             }
+            QGroupBox QLabel, QGroupBox QCheckBox, QGroupBox QSlider,
+            QGroupBox QFrame, QGroupBox QWidget {
+                background: transparent;
+            }
             QPushButton {
                 background: #21262d;
-                border: 1px solid #30363d;
+                border: 1px solid #586273;
                 border-radius: 4px;
                 padding: 6px 10px;
             }
@@ -576,9 +586,9 @@ class MainWindow(QMainWindow):
                 border-color: #58a6ff;
             }
             QPushButton#panelCloseButton {
-                background: #161b22;
+                background: #1f2630;
                 color: #ffffff;
-                border: 1px solid #30363d;
+                border: 1px solid #586273;
                 border-radius: 8px;
                 padding: 0;
                 font-size: 11px;
@@ -590,7 +600,7 @@ class MainWindow(QMainWindow):
             }
             QToolButton#modeBtnLeft, QToolButton#modeBtnRight {
                 background: #21262d;
-                border: 1px solid #30363d;
+                border: 1px solid #586273;
                 border-radius: 0;
                 padding: 4px 8px;
                 font-size: 10px;
@@ -619,8 +629,10 @@ class MainWindow(QMainWindow):
                 font-size: 11px;
             }
             QFrame#brandBadge {
-                background: #161b22;
-                border: 1px solid #30363d;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                            stop:0 #1c2330,
+                                            stop:1 #18202b);
+                border: 1px solid #586273;
                 border-radius: 8px;
             }
             QLabel#brandIcon {
@@ -645,10 +657,14 @@ class MainWindow(QMainWindow):
             }
             QTextEdit {
                 background: #0d1117;
-                border: 1px solid #30363d;
+                border: 1px solid #465264;
+                border-top-color: #0b0f14;
+                border-left-color: #0b0f14;
+                border-right-color: #667285;
+                border-bottom-color: #667285;
             }
             QSlider::groove:horizontal {
-                border: 1px solid #30363d;
+                border: 1px solid #586273;
                 height: 6px;
                 background: #0d1117;
             }
@@ -910,17 +926,17 @@ class MainWindow(QMainWindow):
         badge.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
 
         layout = QHBoxLayout(badge)
-        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setContentsMargins(8, 4, 8, 4)
         layout.setSpacing(8)
 
         icon_label = QLabel()
         icon_label.setObjectName("brandIcon")
-        icon_label.setFixedSize(QSize(50, 50))
+        icon_label.setFixedSize(QSize(44, 44))
         icon_path = Path(__file__).resolve().parent / "assets" / "app_icon.png"
         if icon_path.exists():
             pixmap = QPixmap(str(icon_path)).scaled(
-                44,
-                44,
+                40,
+                40,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
@@ -960,6 +976,7 @@ class MainWindow(QMainWindow):
 
         dash = "dashed" if line_style == "dashed" else "solid"
         hint_container = QWidget()
+        hint_container.setStyleSheet("background: transparent;")
         hint_container.setFixedSize(34, 14)
         hint_container_layout = QVBoxLayout(hint_container)
         hint_container_layout.setContentsMargins(0, 0, 0, 0)
