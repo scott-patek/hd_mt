@@ -188,10 +188,12 @@ class MainWindow(QMainWindow):
         playback_layout = QVBoxLayout(playback_box)
         row = QHBoxLayout()
         self.play_btn = QPushButton()
+        self.play_btn.setObjectName("transportPrimaryButton")
         self.play_btn.setIcon(QIcon(str(Path(__file__).resolve().parent / "assets" / "play_white.svg")))
         self.play_btn.setToolTip("Play")
         self.play_btn.setAccessibleName("Play")
         self.play_btn.setFixedSize(QSize(44, 32))
+        self.play_btn.setProperty("active", False)
         self.pause_btn = QPushButton()
         self.pause_btn.setIcon(QIcon(str(Path(__file__).resolve().parent / "assets" / "pause_white.svg")))
         self.pause_btn.setToolTip("Pause")
@@ -613,6 +615,15 @@ class MainWindow(QMainWindow):
             QPushButton:hover {
                 border-color: #58a6ff;
             }
+            QPushButton#transportPrimaryButton[active="true"] {
+                background: #4f89c3;
+                border-color: #4f89c3;
+                color: #ffffff;
+            }
+            QPushButton#transportPrimaryButton[active="true"]:hover {
+                background: #5b95cf;
+                border-color: #5b95cf;
+            }
             QPushButton#panelCloseButton, QPushButton#spectrumFocusButton {
                 background: #1f2630;
                 color: #ffffff;
@@ -822,6 +833,8 @@ class MainWindow(QMainWindow):
 
     def _set_mode(self, mode: str) -> None:
         """Switch between import, live input, and system output modes."""
+        self._set_transport_button_active(False)
+
         # Stop any active source when switching modes
         if self._input_mode == "live":
             self._live.stop()
@@ -1264,7 +1277,7 @@ class MainWindow(QMainWindow):
         self.ab_btn.clicked.connect(self._toggle_ab)
 
         self.play_btn.clicked.connect(self._on_play_clicked)
-        self.pause_btn.clicked.connect(self.player.pause)
+        self.pause_btn.clicked.connect(self._on_pause_clicked)
         self.stop_btn.clicked.connect(self._on_stop_clicked)
         self.seek_slider.sliderReleased.connect(self._on_seek)
         self.analyze_btn.clicked.connect(self._manual_analyze)
@@ -1836,6 +1849,7 @@ class MainWindow(QMainWindow):
         self.spectrum_avg_peaks_curve_high.setVisible(visible)
 
     def _on_stop_clicked(self) -> None:
+        self._set_transport_button_active(False)
         if self._input_mode == "live":
             self._live.stop()
             self.force_spectrum_silence = True
@@ -1872,16 +1886,19 @@ class MainWindow(QMainWindow):
             self._reset_suggestion_history("New live capture started. Listening for audio…")
             self.force_spectrum_silence = False
             self._live.play()
+            self._set_transport_button_active(True)
             return
         if self._input_mode == "system":
             self._activate_system_capture()
             if not self._system.has_capture_device():
+                self._set_transport_button_active(False)
                 self._show_error(self._system_mode_detail())
                 return
             self._reset_analysis_for_new_playback()
             self._reset_suggestion_history("New system capture started. Listening for playback…")
             self.force_spectrum_silence = False
             self._system.play()
+            self._set_transport_button_active(True)
             return
         if not self.player.state.is_playing:
             self._reset_suggestion_history(
@@ -1890,11 +1907,23 @@ class MainWindow(QMainWindow):
             self._reset_analysis_for_new_playback()
         self.force_spectrum_silence = False
         self.player.play()
+        self._set_transport_button_active(True)
+
+    def _on_pause_clicked(self) -> None:
+        self.player.pause()
+        self._set_transport_button_active(False)
 
     def _on_playback_stopped(self) -> None:
         # Force live bars to settle to silence after stop/end.
+        self._set_transport_button_active(False)
         self.force_spectrum_silence = True
         self.last_chunk_mono.fill(0.0)
+
+    def _set_transport_button_active(self, active: bool) -> None:
+        self.play_btn.setProperty("active", active)
+        self.play_btn.style().unpolish(self.play_btn)
+        self.play_btn.style().polish(self.play_btn)
+        self.play_btn.update()
 
     def _reset_analysis_for_new_playback(self) -> None:
         """Start each playback/capture run with fresh analysis metrics and overlays."""
@@ -2241,6 +2270,7 @@ class MainWindow(QMainWindow):
         return self.main_track
 
     def _on_playback_error(self, msg: str) -> None:
+        self._set_transport_button_active(False)
         if "brew install ffmpeg" in msg:
             self._show_error(msg)
             return
