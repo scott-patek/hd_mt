@@ -42,6 +42,23 @@ def get_ffmpeg_hint():
         return "apt install ffmpeg  (or equivalent for your distro)"
 
 
+def get_system_output_hint():
+    """Return platform-specific system-output setup guidance."""
+    if sys.platform == "darwin":
+        return (
+            "Install BlackHole, create a Multi-Output Device with BlackHole + your "
+            "speakers/headphones, then set macOS output to that device for System mode."
+        )
+    if sys.platform == "win32":
+        return (
+            "Enable a loopback-capable input such as Stereo Mix if your audio driver offers it, "
+            "then choose it in the app's System mode."
+        )
+    return (
+        "Use a loopback-capable input device if your platform exposes one, then choose it in the app's System mode."
+    )
+
+
 def main():
     repo_root = Path(__file__).parent
     venv_path = repo_root / ".venv"
@@ -79,6 +96,10 @@ def main():
         print(f"\n   ⚠️  ffmpeg not found.")
         print(f"   Install it: {get_ffmpeg_hint()}")
         sys.exit(1)
+
+    # 4b. Print system-output guidance.
+    print("\n🎧 System Output mode setup:")
+    print(f"   {get_system_output_hint()}")
 
     # 5. Launch app
     print("\n🎵 Launching app...\n")

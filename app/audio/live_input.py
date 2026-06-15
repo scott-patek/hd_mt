@@ -1,8 +1,9 @@
-"""Live audio input capture via the system default microphone/input device."""
+"""Live audio capture via microphone or system-audio loopback devices."""
 
 from __future__ import annotations
 
 import collections
+import platform
 
 import numpy as np
 import sounddevice as sd
@@ -18,8 +19,58 @@ LIVE_BLOCK_SIZE: int = 2_048
 LIVE_THRESHOLD_RMS: float = 0.003
 
 
+WINDOWS_SYSTEM_CAPTURE_HINTS: tuple[str, ...] = (
+    "stereo mix",
+    "what u hear",
+    "waveout mix",
+    "mixed output",
+    "loopback",
+)
+
+
+def find_system_capture_device(platform_name: str | None = None) -> int | str | None:
+    """Return a capture device suited for system-audio input on the host OS."""
+    system_name = (platform_name or platform.system()).lower()
+    if system_name.startswith("darwin"):
+        hints = ("blackhole",)
+    elif system_name.startswith("win"):
+        hints = WINDOWS_SYSTEM_CAPTURE_HINTS
+    else:
+        hints = ("blackhole", "stereo mix", "what u hear", "loopback")
+
+    for index, info in enumerate(sd.query_devices()):
+        if info["max_input_channels"] <= 0:
+            continue
+        device_name = str(info["name"]).lower()
+        if any(hint in device_name for hint in hints):
+            return index
+
+    return None
+
+
+def system_capture_setup_hint(platform_name: str | None = None) -> str:
+    """Return user-facing setup guidance for system-audio capture."""
+    system_name = (platform_name or platform.system()).lower()
+    if system_name.startswith("darwin"):
+        return (
+            "Install BlackHole. In Audio MIDI Setup, create a Multi-Output Device "
+            "with both BlackHole and your speakers/headphones, then set macOS output "
+            "to that Multi-Output Device."
+        )
+    if system_name.startswith("win"):
+        return (
+            "Use the built-in Windows playback capture path. Enable Stereo Mix or "
+            "another loopback-capable capture device, then select the intended "
+            "Windows playback device in the app."
+        )
+    return (
+        "Configure a loopback-capable system-audio device for this platform, then "
+        "return to the app and select System Output again."
+    )
+
+
 class LiveInputCapture(QObject):
-    """Captures audio from the default system input in real time.
+    """Captures audio from a live input source in real time.
 
     Mirrors AudioPlayer's Qt signal API so MainWindow can swap sources
     transparently. There is no Pause — Stop resets capture.
@@ -38,13 +89,27 @@ class LiveInputCapture(QObject):
     playback_error = Signal(str)
     state_changed = Signal(str)        # "idle" | "listening" | "capturing"
 
-    def __init__(self, parent: QObject | None = None) -> None:
+    def __init__(
+        self,
+        parent: QObject | None = None,
+        *,
+        device_query: int | str | None = None,
+        monitoring_enabled: bool = True,
+        capture_label: str = "live input",
+        setup_hint: str | None = None,
+        allow_fallback_to_default: bool = True,
+    ) -> None:
         super().__init__(parent)
         self._state: str = "idle"
         self._stream: sd.InputStream | sd.Stream | None = None
         self._elapsed_s: float = 0.0
         self._capture_channels: int = LIVE_CHANNELS
-        self._monitoring_enabled: bool = True
+        self._samplerate: int = LIVE_SAMPLERATE
+        self._monitoring_enabled: bool = monitoring_enabled
+        self._device_query: int | str | None = device_query
+        self._capture_label: str = capture_label
+        self._setup_hint: str | None = setup_hint
+        self._allow_fallback_to_default: bool = allow_fallback_to_default
 
         # Thread-safe queue: audio thread appends, main thread drains.
         self._chunk_queue: collections.deque[np.ndarray] = collections.deque(maxlen=128)
@@ -65,10 +130,43 @@ class LiveInputCapture(QObject):
         """Current state: 'idle', 'listening', or 'capturing'."""
         return self._state
 
+    @property
+    def device_query(self) -> int | str | None:
+        return self._device_query
+
+    def has_capture_device(self) -> bool:
+        return self._device_query is not None
+
+    @property
+    def samplerate(self) -> int:
+        return self._samplerate
+
+    def _selected_samplerate(self) -> int:
+        if self._device_query is None:
+            return LIVE_SAMPLERATE
+        try:
+            info = sd.query_devices(self._device_query)
+        except Exception:
+            return LIVE_SAMPLERATE
+        device_rate = int(info.get("default_samplerate") or LIVE_SAMPLERATE)
+        return device_rate if device_rate > 0 else LIVE_SAMPLERATE
+
+    def set_device_query(self, device_query: int | str | None) -> None:
+        self._device_query = device_query
+
+    def setup_message(self) -> str:
+        if self._setup_hint:
+            return self._setup_hint
+        return f"Select a capture device for {self._capture_label}."
+
     def play(self) -> None:
-        """Open the default input and enter the LISTENING state."""
+        """Open the configured input and enter the LISTENING state."""
         if self._state != "idle":
             return
+        if self._device_query is None and not self._allow_fallback_to_default:
+            self.playback_error.emit(self.setup_message())
+            return
+        self._samplerate = self._selected_samplerate()
         self._elapsed_s = 0.0
         self._chunk_queue.clear()
         self._pending_capturing = False
@@ -79,10 +177,11 @@ class LiveInputCapture(QObject):
             if self._monitoring_enabled:
                 try:
                     self._stream = sd.Stream(
-                        samplerate=LIVE_SAMPLERATE,
+                        samplerate=self._samplerate,
                         channels=(channels, channels),
                         dtype="float32",
                         blocksize=LIVE_BLOCK_SIZE,
+                        device=self._device_query,
                         callback=self._sd_duplex_callback,
                     )
                     self._stream.start()
@@ -95,10 +194,11 @@ class LiveInputCapture(QObject):
             # Fallback to capture-only if duplex cannot be opened.
             try:
                 self._stream = sd.InputStream(
-                    samplerate=LIVE_SAMPLERATE,
+                    samplerate=self._samplerate,
                     channels=channels,
                     dtype="float32",
                     blocksize=LIVE_BLOCK_SIZE,
+                    device=self._device_query,
                     callback=self._sd_input_callback,
                 )
                 self._stream.start()
@@ -110,7 +210,12 @@ class LiveInputCapture(QObject):
 
         if self._stream is None:
             detail = " | ".join(open_errors) if open_errors else "unknown input stream error"
-            self.playback_error.emit(f"Could not open live input stream ({detail}).")
+            if self._setup_hint and not self._allow_fallback_to_default:
+                self.playback_error.emit(
+                    f"Could not open {self._capture_label} stream ({detail}). {self._setup_hint}"
+                )
+            else:
+                self.playback_error.emit(f"Could not open {self._capture_label} stream ({detail}).")
             return
 
         self._state = "listening"
@@ -194,7 +299,7 @@ class LiveInputCapture(QObject):
                 self._elapsed_s = 0.0
                 self._pending_capturing = True
         else:
-            self._elapsed_s += frames / LIVE_SAMPLERATE
+            self._elapsed_s += frames / float(self._samplerate)
 
     # ------------------------------------------------------------------
     # Main-thread drain — called by QTimer every 20 ms
@@ -215,3 +320,24 @@ class LiveInputCapture(QObject):
 
         if self._state == "capturing":
             self.position_changed.emit(self._elapsed_s)
+
+
+class SystemOutputCapture(LiveInputCapture):
+    """Captures system playback from the platform's loopback-capable device."""
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(
+            parent,
+            device_query=find_system_capture_device(),
+            monitoring_enabled=False,
+            capture_label="system output",
+            setup_hint=system_capture_setup_hint(),
+            allow_fallback_to_default=False,
+        )
+
+    def refresh_device(self) -> None:
+        self.set_device_query(find_system_capture_device())
+
+    def play(self) -> None:
+        self.refresh_device()
+        super().play()
