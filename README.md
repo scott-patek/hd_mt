@@ -11,6 +11,7 @@ Python desktop app for objective mastering guidance with strong low-end safety c
 - Low-end diagnostics for Sub (20-60 Hz), Bass (60-120 Hz), Low-mid (120-350 Hz).
 - Continuous coaching and manual Analyze report with trend history.
 - Optional reference track with level-matched A/B comparison.
+- System Output mode for listening to computer playback through a loopback-capable audio device.
 
 ## Prerequisites
 
@@ -41,6 +42,35 @@ python run.py
 ```
 
 Or double-click `run.bat` in File Explorer.
+
+## System Output mode
+
+When you choose System Output, the app listens to a loopback-capable input instead of a microphone.
+
+- **macOS:** install BlackHole, then route output through a Multi-Output Device that includes both BlackHole and your speakers/headphones.
+- **Windows:** use Stereo Mix or another driver-provided loopback input if your audio device exposes one.
+- The launcher prints the platform-specific setup hint before opening the app.
+
+### macOS BlackHole setup (recommended)
+
+Use this when you want to analyze browser/app playback (YouTube, Apple Music, Spotify, etc.) in System mode.
+
+1. Install BlackHole 2ch:
+	- `brew install --cask blackhole-2ch`
+	- Or install from the BlackHole project website if you prefer a manual installer.
+2. Open **Audio MIDI Setup** (Applications > Utilities).
+3. Click the **+** button at bottom-left, then choose **Create Multi-Output Device**.
+4. In the right panel, enable both:
+	- **BlackHole 2ch**
+	- Your physical output (**Mac Speakers**, headphones, or audio interface)
+5. Optionally enable **Drift Correction** for the non-clock device if you hear timing drift.
+6. In macOS sound output settings, choose the new **Multi-Output Device**.
+7. In this app, choose **System** mode.
+
+Important behavior:
+- If macOS output is set to **BlackHole only**, you will capture audio but hear silence.
+- If macOS output is set to the **Multi-Output Device**, audio is duplicated: you hear it and the app captures it.
+- When finished using System mode, switch macOS output back to your normal speakers/headphones if desired.
 
 ---
 

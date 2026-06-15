@@ -34,7 +34,12 @@ from app.analysis.metrics import AnalysisSnapshot, MetricsEngine
 from app.analysis.spectrum import SpectrumAnalyzer
 from app.analysis.genres import list_genres, get_genre
 from app.audio.audio_loader import AudioLoader, AudioTrack
-from app.audio.live_input import LiveInputCapture, LIVE_SAMPLERATE
+from app.audio.live_input import (
+    LIVE_SAMPLERATE,
+    LiveInputCapture,
+    SystemOutputCapture,
+    system_capture_setup_hint,
+)
 from app.audio.player import AudioPlayer
 from app.coaching.coach import SafeMasteringCoach
 
@@ -51,6 +56,7 @@ class MainWindow(QMainWindow):
         self.loader = AudioLoader()
         self.player = AudioPlayer(block_size=2048)
         self._live = LiveInputCapture()
+        self._system = SystemOutputCapture()
         self.coach = SafeMasteringCoach(true_peak_target_dbtp=-1.0)
         self.current_genre = get_genre("house")
 
@@ -111,6 +117,7 @@ class MainWindow(QMainWindow):
         self._build_ui()
         self._build_view_menu()
         self._wire_signals()
+        self._refresh_system_mode_status()
 
         self.ui_timer = QTimer(self)
         self.ui_timer.setInterval(90)
@@ -169,7 +176,7 @@ class MainWindow(QMainWindow):
         file_layout.addWidget(self.ab_btn, 2, 0, 1, 2)
 
         mode_box = QGroupBox("Mode")
-        mode_box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        mode_box.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         mode_layout = QVBoxLayout(mode_box)
         mode_layout.setContentsMargins(8, 6, 8, 8)
         mode_layout.setSpacing(0)
@@ -636,7 +643,6 @@ class MainWindow(QMainWindow):
             QToolButton#modeBtnRight {
                 border-top-right-radius: 5px;
                 border-bottom-right-radius: 5px;
-                border-left: none;
             }
             QToolButton#modeBtnLeft:checked, QToolButton#modeBtnRight:checked {
                 background: #388bfd;
@@ -722,26 +728,67 @@ class MainWindow(QMainWindow):
         self.mode_import_btn.setText("Import")
         self.mode_import_btn.setCheckable(True)
         self.mode_import_btn.setChecked(True)
-        self.mode_import_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
 
         self.mode_live_btn = QToolButton()
         self.mode_live_btn.setObjectName("modeBtnRight")
         self.mode_live_btn.setText("Live Input")
         self.mode_live_btn.setCheckable(True)
-        self.mode_live_btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        self.mode_system_btn = QToolButton()
+        self.mode_system_btn.setObjectName("modeBtnLeft")
+        self.mode_system_btn.setText("System")
+        self.mode_system_btn.setCheckable(True)
+
+        self.mode_placeholder_btn = QToolButton()
+        self.mode_placeholder_btn.setObjectName("modeBtnRight")
+        self.mode_placeholder_btn.setText("")
+        self.mode_placeholder_btn.setEnabled(False)
 
         self._mode_group = QButtonGroup(self)
         self._mode_group.addButton(self.mode_import_btn, 0)
         self._mode_group.addButton(self.mode_live_btn, 1)
+        self._mode_group.addButton(self.mode_system_btn, 2)
         self._mode_group.setExclusive(True)
 
         self.mode_status_label = QLabel("")
         self.mode_status_label.setObjectName("modeStatusLabel")
+        self.mode_status_label.setVisible(False)
 
-        btn_row.addWidget(self.mode_import_btn)
-        btn_row.addWidget(self.mode_live_btn)
-        layout.addLayout(btn_row)
+        self.mode_detail_label = QLabel("")
+        self.mode_detail_label.setWordWrap(True)
+        self.mode_detail_label.setMinimumHeight(0)
+        self.mode_detail_label.setMaximumHeight(100)
+        self.mode_detail_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+        self.mode_detail_label.setStyleSheet("color: #8b949e; font-size: 10px; padding: 3px;")
+        self.mode_detail_label.setVisible(False)
+
+        mode_buttons = [
+            self.mode_import_btn,
+            self.mode_live_btn,
+            self.mode_system_btn,
+            self.mode_placeholder_btn,
+        ]
+        mode_button_width = max(button.sizeHint().width() for button in mode_buttons) + 30
+        mode_button_height = max(button.sizeHint().height() for button in mode_buttons) + 10
+        for button in mode_buttons:
+            button.setFixedSize(mode_button_width, mode_button_height)
+
+        mode_grid_widget = QWidget()
+        mode_grid_widget.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        mode_grid_widget.setFixedSize(mode_button_width * 2, mode_button_height * 2)
+        grid = QGridLayout(mode_grid_widget)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.setHorizontalSpacing(0)
+        grid.setVerticalSpacing(0)
+
+        grid.addWidget(self.mode_import_btn, 0, 0)
+        grid.addWidget(self.mode_live_btn, 0, 1)
+        grid.addWidget(self.mode_system_btn, 1, 0)
+        grid.addWidget(self.mode_placeholder_btn, 1, 1)
+        layout.addWidget(mode_grid_widget, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addSpacing(10)
         layout.addWidget(self.mode_status_label)
+        layout.addWidget(self.mode_detail_label)
         return bar
 
     # ------------------------------------------------------------------
@@ -774,16 +821,19 @@ class MainWindow(QMainWindow):
                 pass
 
     def _set_mode(self, mode: str) -> None:
-        """Switch between 'import' and 'live' input modes."""
+        """Switch between import, live input, and system output modes."""
         # Stop any active source when switching modes
         if self._input_mode == "live":
             self._live.stop()
+        elif self._input_mode == "system":
+            self._system.stop()
         elif self._input_mode == "import":
             self.player.stop()
 
         # Disconnect both sources (safe if not yet connected)
         self._disconnect_source(self.player)
         self._disconnect_source(self._live)
+        self._disconnect_source(self._system)
 
         self._input_mode = mode
 
@@ -794,25 +844,40 @@ class MainWindow(QMainWindow):
             self.seek_slider.setEnabled(True)
             self.pause_btn.setVisible(True)
             self.pause_btn.setEnabled(True)
-            self.mode_status_label.setText("")
+            self._set_mode_message("", "")
             self.mode_import_btn.setChecked(True)
             active_track = self._active_track()
             if active_track is not None:
                 self.metrics = MetricsEngine(active_track.samplerate)
                 self._configure_spectrum_analyzers(active_track.samplerate)
-        else:  # live
+        elif mode == "live":
             self._connect_source(self._live)
             self.file_box.setVisible(False)
             self.playback_box.setTitle("Capture")
             self.seek_slider.setEnabled(False)
             self.pause_btn.setVisible(False)
             self.pause_btn.setEnabled(False)
-            self.mode_status_label.setText("Ready")
+            self._set_mode_message("Ready", "Live Input captures the default microphone/input device.")
             self.mode_live_btn.setChecked(True)
             self._reset_analysis_state(clear_history=True)
             self.metrics = MetricsEngine(LIVE_SAMPLERATE)
             self._configure_spectrum_analyzers(LIVE_SAMPLERATE)
             self._reset_suggestion_history("Live input mode. Press Play to start listening.")
+            self._set_time_label(0.0, 0.0)
+        else:  # system
+            self._connect_source(self._system)
+            self._system.refresh_device()
+            self.file_box.setVisible(False)
+            self.playback_box.setTitle("System Capture")
+            self.seek_slider.setEnabled(False)
+            self.pause_btn.setVisible(False)
+            self.pause_btn.setEnabled(False)
+            self.mode_system_btn.setChecked(True)
+            self._reset_analysis_state(clear_history=True)
+            self.metrics = MetricsEngine(LIVE_SAMPLERATE)
+            self._configure_spectrum_analyzers(LIVE_SAMPLERATE)
+            self._reset_suggestion_history(self._system_mode_detail())
+            self._set_mode_message(self._system_mode_status(), self._system_mode_detail())
             self._set_time_label(0.0, 0.0)
 
     # ------------------------------------------------------------------
@@ -843,21 +908,78 @@ class MainWindow(QMainWindow):
         """Initialize spectrum analyzers and X ranges for 48 kHz live input."""
         self._configure_spectrum_analyzers(LIVE_SAMPLERATE)
 
+    def _activate_system_capture(self) -> None:
+        """Initialize the capture view for system output."""
+        self._system.refresh_device()
+        self._configure_spectrum_analyzers(LIVE_SAMPLERATE)
+
     def _on_live_state_changed(self, state: str) -> None:
-        """Update the status label from LiveInputCapture.state_changed signal."""
+        """Update the status label from live/system capture state changes."""
+        if self._input_mode == "system":
+            if state == "idle":
+                self._set_mode_message(self._system_mode_status(), self._system_mode_detail())
+            elif state == "listening":
+                self._set_mode_message("System Output: waiting for audio…", self._system_mode_detail())
+            elif state == "capturing":
+                self._set_mode_message("System Output: capturing", self._system_mode_detail())
+            return
+
         if state == "idle":
-            self.mode_status_label.setText("Ready")
+            self._set_mode_message("Ready", "Live Input captures the default microphone/input device.")
         elif state == "listening":
-            self.mode_status_label.setText("Waiting for input…")
+            self._set_mode_message("Waiting for input…", "Live Input captures the default microphone/input device.")
         elif state == "capturing":
-            self.mode_status_label.setText("Capturing")
+            self._set_mode_message("Capturing", "Live Input captures the default microphone/input device.")
 
     @property
     def _is_source_active(self) -> bool:
         """True when audio is actively playing or being captured."""
         if self._input_mode == "live":
             return self._live.state == "capturing"
+        if self._input_mode == "system":
+            return self._system.state == "capturing"
         return self.player.state.is_playing
+
+    def _system_mode_status(self) -> str:
+        if self._system.has_capture_device():
+            return "System Output ready"
+        return "System Output needs setup"
+
+    def _system_mode_detail(self) -> str:
+        if self._system.has_capture_device():
+            device_name = self._describe_system_capture_device()
+            if device_name:
+                return f"System will capture from {device_name}."
+            return "System is ready for loopback capture."
+        return system_capture_setup_hint().replace("System Output", "System")
+
+    def _describe_system_capture_device(self) -> str:
+        device_query = self._system.device_query
+        if device_query is None:
+            return ""
+        try:
+            import sounddevice as sd
+
+            info = sd.query_devices(device_query)
+        except Exception:
+            return ""
+        return str(info.get("name", ""))
+
+    def _refresh_system_mode_status(self) -> None:
+        self._system.refresh_device()
+        if self._input_mode == "system":
+            self._set_mode_message(self._system_mode_status(), self._system_mode_detail())
+
+    def _set_mode_message(self, status: str, detail: str) -> None:
+        self.mode_status_label.setText(status)
+        self.mode_detail_label.setText(detail)
+        self.mode_status_label.setVisible(bool(status))
+        self.mode_detail_label.setVisible(bool(detail))
+
+    def _active_capture_source(self) -> LiveInputCapture:
+        if self._input_mode == "system":
+            return self._system
+        return self._live
 
     def _install_panel_close_button(self, box: QGroupBox, on_hide: callable) -> None:
         close_btn = QPushButton("X", box)
@@ -1153,6 +1275,7 @@ class MainWindow(QMainWindow):
 
         self.mode_import_btn.clicked.connect(lambda: self._set_mode("import"))
         self.mode_live_btn.clicked.connect(lambda: self._set_mode("live"))
+        self.mode_system_btn.clicked.connect(lambda: self._set_mode("system"))
 
         self.house_curve_toggle.toggled.connect(self._update_target_curve_visibility)
         self.spectrum_plot_low.scene().sigMouseMoved.connect(self._on_spectrum_low_mouse_moved)
@@ -1367,7 +1490,7 @@ class MainWindow(QMainWindow):
         self._update_meter_labels(snapshot)
 
     def _on_position(self, pos_s: float) -> None:
-        if self._input_mode == "live":
+        if self._input_mode in ("live", "system"):
             self._set_time_label(pos_s, 0.0)
             return
         track = self._active_track()
@@ -1687,8 +1810,10 @@ class MainWindow(QMainWindow):
         self.spectrum_plot_high.addItem(self.spectrum_max_caps_high)
 
     def _should_update_avg_peaks(self) -> bool:
-        if self._input_mode == "live":
-            return self._live.state == "capturing"
+        if self._input_mode in ("live", "system"):
+            if self._input_mode == "live":
+                return self._live.state == "capturing"
+            return self._system.state == "capturing"
 
         if not self.player.state.is_playing:
             return False
@@ -1713,6 +1838,12 @@ class MainWindow(QMainWindow):
     def _on_stop_clicked(self) -> None:
         if self._input_mode == "live":
             self._live.stop()
+            self.force_spectrum_silence = True
+            self.last_chunk_mono.fill(0.0)
+            self._reset_meter_histories()
+            return
+        if self._input_mode == "system":
+            self._system.stop()
             self.force_spectrum_silence = True
             self.last_chunk_mono.fill(0.0)
             self._reset_meter_histories()
@@ -1742,6 +1873,16 @@ class MainWindow(QMainWindow):
             self.force_spectrum_silence = False
             self._live.play()
             return
+        if self._input_mode == "system":
+            self._activate_system_capture()
+            if not self._system.has_capture_device():
+                self._show_error(self._system_mode_detail())
+                return
+            self._reset_analysis_for_new_playback()
+            self._reset_suggestion_history("New system capture started. Listening for playback…")
+            self.force_spectrum_silence = False
+            self._system.play()
+            return
         if not self.player.state.is_playing:
             self._reset_suggestion_history(
                 "New playback run started. Timestamped coaching timeline restarted."
@@ -1759,6 +1900,8 @@ class MainWindow(QMainWindow):
         """Start each playback/capture run with fresh analysis metrics and overlays."""
         if self._input_mode == "live":
             self.metrics = MetricsEngine(LIVE_SAMPLERATE)
+        elif self._input_mode == "system":
+            self.metrics = MetricsEngine(self._system.samplerate)
         else:
             track = self._active_track()
             if track is not None:
@@ -2109,5 +2252,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self.player.stop()
+        self._live.stop()
+        self._system.stop()
         self.loader.cleanup()
         super().closeEvent(event)
