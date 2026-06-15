@@ -104,6 +104,9 @@ class MainWindow(QMainWindow):
         self.suggestion_history_lines: list[str] = []
         self.last_suggestion_signature: str | None = None
         self._panel_close_buttons: dict[QGroupBox, QPushButton] = {}
+        self._spectrum_focus_buttons: dict[QGroupBox, QPushButton] = {}
+        self._focused_spectrum_key: str | None = None
+        self._spectrum_boxes: dict[str, QGroupBox] = {}
 
         self._build_ui()
         self._build_view_menu()
@@ -272,18 +275,18 @@ class MainWindow(QMainWindow):
             "background: #0d1117;"
             "border: 1px solid #586273;"
             "border-radius: 4px;"
-            "padding: 6px 10px;"
-            "min-height: 26px;"
+            "padding: 4px 10px;"
+            "min-height: 21px;"
             "}"
             "QComboBox {"
-            "padding: 5px 28px 5px 10px;"
+            "padding: 3px 28px 3px 10px;"
             "}"
             "QDoubleSpinBox {"
-            "padding: 5px 28px 5px 10px;"
+            "padding: 3px 28px 3px 10px;"
             "}"
             "QComboBox::drop-down {"
             "border: none;"
-            "background: #0d1117;"
+            "background: transparent;"
             "width: 24px;"
             "subcontrol-origin: padding;"
             "subcontrol-position: top right;"
@@ -296,7 +299,7 @@ class MainWindow(QMainWindow):
             "margin-bottom: 2px;"
             "}"
             "QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {"
-            "background: #0d1117;"
+            "background: transparent;"
             "border: none;"
             "width: 24px;"
             "}"
@@ -355,6 +358,7 @@ class MainWindow(QMainWindow):
         center_layout.setSpacing(14)
         center.setMinimumWidth(620)
         self.center_widget = center
+        self.center_layout = center_layout
 
         self.suggestion_box = QGroupBox("Safe Mastering Suggestions")
         suggestion_layout = QVBoxLayout(self.suggestion_box)
@@ -490,6 +494,14 @@ class MainWindow(QMainWindow):
         self.zero_line_high = pg.InfiniteLine(pos=0.0, angle=0, pen=pg.mkPen("#ff8080", width=1))
         self.spectrum_plot_high.addItem(self.zero_line_high)
         self.spectrum_box_high = self._create_spectrum_box("High Spectrum (4000-20000 Hz)", self.spectrum_plot_high)
+        self._spectrum_boxes = {
+            "low": self.spectrum_box_low,
+            "mid": self.spectrum_box_mid,
+            "high": self.spectrum_box_high,
+        }
+        self._install_spectrum_focus_button(self.spectrum_box_low, "low")
+        self._install_spectrum_focus_button(self.spectrum_box_mid, "mid")
+        self._install_spectrum_focus_button(self.spectrum_box_high, "high")
 
         self.spectrum_readout_label = QLabel("Spectrum readout: hover over bars")
         self.zone_legend_label = QLabel(
@@ -565,6 +577,15 @@ class MainWindow(QMainWindow):
                 border-radius: 6px;
                 margin-top: 8px;
                 padding-top: 8px;
+                font-size: 13px;
+                font-weight: 500;
+            }
+            QGroupBox * {
+                font-size: 12px;
+                font-weight: 400;
+            }
+            QGroupBox#spectrumBox {
+                border: 3px solid #111821;
             }
             QGroupBox::title {
                 color: #58a6ff;
@@ -585,16 +606,18 @@ class MainWindow(QMainWindow):
             QPushButton:hover {
                 border-color: #58a6ff;
             }
-            QPushButton#panelCloseButton {
+            QPushButton#panelCloseButton, QPushButton#spectrumFocusButton {
                 background: #1f2630;
                 color: #ffffff;
                 border: 1px solid #586273;
-                border-radius: 8px;
+                border-radius: 0px;
                 padding: 0;
+            }
+            QPushButton#panelCloseButton {
                 font-size: 11px;
                 font-weight: 700;
             }
-            QPushButton#panelCloseButton:hover {
+            QPushButton#panelCloseButton:hover, QPushButton#spectrumFocusButton:hover {
                 border-color: #58a6ff;
                 background: #21262d;
             }
@@ -841,7 +864,7 @@ class MainWindow(QMainWindow):
         close_btn.setObjectName("panelCloseButton")
         close_btn.setToolTip(f"Hide {box.title()}")
         close_btn.setAccessibleName(f"Hide {box.title()}")
-        close_btn.setFixedSize(QSize(16, 16))
+        close_btn.setFixedSize(QSize(26, 18))
         close_btn.clicked.connect(on_hide)
         close_btn.raise_()
         self._panel_close_buttons[box] = close_btn
@@ -855,9 +878,82 @@ class MainWindow(QMainWindow):
         x_pos = max(8, box.width() - close_btn.width() - 8)
         close_btn.move(x_pos, 0)
 
+    def _install_spectrum_focus_button(self, box: QGroupBox, key: str) -> None:
+        focus_btn = QPushButton(box)
+        focus_btn.setObjectName("spectrumFocusButton")
+        focus_btn.setToolTip(f"Focus {box.title()}")
+        focus_btn.setAccessibleName(f"Focus {box.title()}")
+        focus_btn.setFixedSize(QSize(26, 18))
+        self._set_spectrum_focus_button_icon(focus_btn, is_focused=False)
+        focus_btn.clicked.connect(lambda _checked=False, spectrum_key=key: self._toggle_spectrum_focus(spectrum_key))
+        focus_btn.raise_()
+        self._spectrum_focus_buttons[box] = focus_btn
+        box.installEventFilter(self)
+        self._position_spectrum_focus_button(box)
+
+    def _set_spectrum_focus_button_icon(self, button: QPushButton, is_focused: bool) -> None:
+        icon_name = "compress_white.svg" if is_focused else "expand_white.svg"
+        icon_path = Path(__file__).resolve().parent / "assets" / icon_name
+        button.setIcon(QIcon(str(icon_path)))
+        button.setIconSize(QSize(12, 12))
+
+    def _position_spectrum_focus_button(self, box: QGroupBox) -> None:
+        focus_btn = self._spectrum_focus_buttons.get(box)
+        if focus_btn is None:
+            return
+        x_pos = max(8, box.width() - focus_btn.width() - 8)
+        focus_btn.move(x_pos, 0)
+
+    def _toggle_spectrum_focus(self, key: str) -> None:
+        if self._focused_spectrum_key == key:
+            self._set_spectrum_focus(None)
+            return
+        self._set_spectrum_focus(key)
+
+    def _set_spectrum_focus(self, key: str | None) -> None:
+        self._focused_spectrum_key = key
+        for spectrum_key, box in self._spectrum_boxes.items():
+            is_visible = key is None or spectrum_key == key
+            box.setVisible(is_visible)
+
+        for spectrum_key, box in self._spectrum_boxes.items():
+            focus_btn = self._spectrum_focus_buttons.get(box)
+            if focus_btn is None:
+                continue
+            if key is not None and spectrum_key == key:
+                focus_btn.setText("")
+                self._set_spectrum_focus_button_icon(focus_btn, is_focused=True)
+                focus_btn.setToolTip("Restore all spectrum graphs")
+                focus_btn.setAccessibleName("Restore all spectrum graphs")
+            else:
+                focus_btn.setText("")
+                self._set_spectrum_focus_button_icon(focus_btn, is_focused=False)
+                focus_btn.setToolTip(f"Focus {box.title()}")
+                focus_btn.setAccessibleName(f"Focus {box.title()}")
+
+        self._update_spectrum_layout_stretches()
+
+    def _update_spectrum_layout_stretches(self) -> None:
+        if self._focused_spectrum_key is None:
+            self.center_layout.setStretchFactor(self.spectrum_box_low, 3)
+            self.center_layout.setStretchFactor(self.spectrum_box_mid, 3)
+            self.center_layout.setStretchFactor(self.spectrum_box_high, 3)
+            return
+
+        self.center_layout.setStretchFactor(self.spectrum_box_low, 0)
+        self.center_layout.setStretchFactor(self.spectrum_box_mid, 0)
+        self.center_layout.setStretchFactor(self.spectrum_box_high, 0)
+
+        focused_box = self._spectrum_boxes.get(self._focused_spectrum_key)
+        if focused_box is not None:
+            self.center_layout.setStretchFactor(focused_box, 9)
+
     def eventFilter(self, watched: object, event: QEvent) -> bool:
-        if watched in self._panel_close_buttons and event.type() in (QEvent.Type.Resize, QEvent.Type.Show):
-            self._position_panel_close_button(watched)
+        if event.type() in (QEvent.Type.Resize, QEvent.Type.Show):
+            if watched in self._panel_close_buttons:
+                self._position_panel_close_button(watched)
+            if watched in self._spectrum_focus_buttons:
+                self._position_spectrum_focus_button(watched)
         return super().eventFilter(watched, event)
 
     def _hide_safety_meters(self) -> None:
@@ -915,6 +1011,7 @@ class MainWindow(QMainWindow):
 
     def _create_spectrum_box(self, title: str, plot: pg.PlotWidget) -> QGroupBox:
         box = QGroupBox(title)
+        box.setObjectName("spectrumBox")
         layout = QVBoxLayout(box)
         layout.setContentsMargins(8, 0, 8, 8)
         layout.setSpacing(0)
