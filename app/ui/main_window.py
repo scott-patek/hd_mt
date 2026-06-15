@@ -893,6 +893,8 @@ class MainWindow(QMainWindow):
         y_label: str,
     ) -> None:
         plot.setStyleSheet("border: none;")
+        plot.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        plot.setMinimumHeight(190)
         plot.plotItem.setContentsMargins(0, 0, 0, 8)
 
         # Match graph text size with the app control text (12px in stylesheet).
@@ -914,9 +916,9 @@ class MainWindow(QMainWindow):
     def _create_spectrum_box(self, title: str, plot: pg.PlotWidget) -> QGroupBox:
         box = QGroupBox(title)
         layout = QVBoxLayout(box)
-        layout.setContentsMargins(8, 2, 8, 8)
+        layout.setContentsMargins(8, 0, 8, 8)
         layout.setSpacing(0)
-        layout.addWidget(plot)
+        layout.addWidget(plot, 1)
         return box
 
     def _build_brand_badge(self) -> QFrame:
