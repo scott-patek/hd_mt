@@ -113,6 +113,7 @@ class MainWindow(QMainWindow):
         self._spectrum_focus_buttons: dict[QGroupBox, QPushButton] = {}
         self._focused_spectrum_key: str | None = None
         self._spectrum_boxes: dict[str, QGroupBox] = {}
+        self.phase_corr_value = 0.0
 
         self._build_ui()
         self._build_view_menu()
@@ -526,6 +527,58 @@ class MainWindow(QMainWindow):
             "<span style='color:#ff4d4f;'>■ 2k-5k Hz Piercing Zone</span>"
         )
 
+        self.phase_safety_box = QGroupBox("Phase Correlation Meters (Phase Safety)")
+        phase_layout = QVBoxLayout(self.phase_safety_box)
+        phase_layout.setSpacing(6)
+
+        self.phase_safety_label = QLabel("Phase Correlation: --")
+        self.phase_safety_hint_label = QLabel(
+            "Safe zone: 0 to +1 (green) | Danger zone: -1 to 0 (red)"
+        )
+        self.phase_safety_hint_label.setStyleSheet("color: #8b949e; font-size: 10px;")
+
+        self.phase_safety_plot = self._create_phase_meter_plot()
+        self.phase_danger_region = pg.BarGraphItem(
+            x=[-0.5],
+            y0=[0.0],
+            height=[1.0],
+            width=[1.0],
+            brush=pg.mkBrush(255, 77, 79, 55),
+            pen=pg.mkPen(width=0),
+        )
+        self.phase_safe_region = pg.BarGraphItem(
+            x=[0.5],
+            y0=[0.0],
+            height=[1.0],
+            width=[1.0],
+            brush=pg.mkBrush(46, 160, 67, 55),
+            pen=pg.mkPen(width=0),
+        )
+        self.phase_corr_bar = pg.BarGraphItem(
+            x=[0.0],
+            y0=[0.0],
+            height=[1.0],
+            width=[0.0],
+            brush=pg.mkBrush("#2ea043"),
+            pen=pg.mkPen(width=0),
+        )
+        self.phase_zero_line = pg.InfiniteLine(pos=0.0, angle=90, pen=pg.mkPen("#8b949e", width=1))
+        self.phase_corr_indicator = pg.InfiniteLine(pos=0.0, angle=90, pen=pg.mkPen("#d0d7de", width=2))
+        self.phase_safe_region.setZValue(5)
+        self.phase_danger_region.setZValue(5)
+        self.phase_corr_bar.setZValue(20)
+        self.phase_zero_line.setZValue(25)
+        self.phase_corr_indicator.setZValue(30)
+        self.phase_safety_plot.addItem(self.phase_danger_region)
+        self.phase_safety_plot.addItem(self.phase_safe_region)
+        self.phase_safety_plot.addItem(self.phase_corr_bar)
+        self.phase_safety_plot.addItem(self.phase_zero_line)
+        self.phase_safety_plot.addItem(self.phase_corr_indicator)
+        phase_layout.addWidget(self.phase_safety_label)
+        phase_layout.addWidget(self.phase_safety_hint_label)
+        phase_layout.addWidget(self.phase_safety_plot)
+        self._update_phase_safety_meter(None)
+
         self.report_panel = QTextEdit()
         self.report_panel.setReadOnly(True)
 
@@ -537,8 +590,10 @@ class MainWindow(QMainWindow):
 
         self._install_panel_close_button(self.meter_box, self._hide_safety_meters)
         self._install_panel_close_button(self.suggestion_box, self._hide_suggestions)
+        self._install_panel_close_button(self.phase_safety_box, self._hide_phase_safety)
         self._install_panel_close_button(self.report_box, self._hide_analyze_report)
 
+        center_layout.addWidget(self.phase_safety_box)
         center_layout.addWidget(self.spectrum_box_low, 3)
         center_layout.addWidget(self.spectrum_box_mid, 3)
         center_layout.addWidget(self.spectrum_box_high, 3)
@@ -571,6 +626,10 @@ class MainWindow(QMainWindow):
         self.toggle_suggestions_action.setCheckable(True)
         self.toggle_suggestions_action.setChecked(True)
         self.view_menu.addAction(self.toggle_suggestions_action)
+        self.toggle_phase_safety_action = QAction("Show Phase Correlation Meters", self)
+        self.toggle_phase_safety_action.setCheckable(True)
+        self.toggle_phase_safety_action.setChecked(False)
+        self.view_menu.addAction(self.toggle_phase_safety_action)
         self.toggle_analyze_report_action = QAction("Show Analyze Report", self)
         self.toggle_analyze_report_action.setCheckable(True)
         self.toggle_analyze_report_action.setChecked(False)
@@ -1114,6 +1173,9 @@ class MainWindow(QMainWindow):
     def _hide_suggestions(self) -> None:
         self.toggle_suggestions_action.setChecked(False)
 
+    def _hide_phase_safety(self) -> None:
+        self.toggle_phase_safety_action.setChecked(False)
+
     def _hide_analyze_report(self) -> None:
         self.toggle_analyze_report_action.setChecked(False)
 
@@ -1132,6 +1194,43 @@ class MainWindow(QMainWindow):
         plot.setXRange(0.0, float(self.meter_history_len - 1), padding=0.0)
         plot.setYRange(y_min, y_max, padding=0.0)
         return plot
+
+    def _create_phase_meter_plot(self) -> pg.PlotWidget:
+        plot = pg.PlotWidget()
+        plot.setFixedHeight(50)
+        plot.setMinimumWidth(160)
+        plot.setMenuEnabled(False)
+        plot.setMouseEnabled(x=False, y=False)
+        plot.setBackground(None)
+        plot.viewport().setAutoFillBackground(False)
+        plot.setStyleSheet("background: transparent; border: none;")
+        plot.showGrid(x=False, y=False)
+        plot.plotItem.hideAxis("left")
+        axis = plot.getAxis("bottom")
+        axis.setTickFont(QFont("Menlo", 10))
+        axis.setTextPen(pg.mkPen("#9aa4ad"))
+        axis.setTicks([[(-1.0, "-1"), (0.0, "0"), (1.0, "+1")]])
+        plot.plotItem.vb.setDefaultPadding(0.0)
+        plot.plotItem.setContentsMargins(0, 0, 0, 0)
+        plot.setXRange(-1.0, 1.0, padding=0.0)
+        plot.setYRange(0.0, 1.0, padding=0.0)
+        return plot
+
+    def _update_phase_safety_meter(self, correlation: float | None) -> None:
+        if correlation is None or not np.isfinite(correlation):
+            corr = 0.0
+            self.phase_safety_label.setText("Phase Correlation: --")
+        else:
+            corr = float(np.clip(correlation, -1.0, 1.0))
+            status = "safe" if corr >= 0.0 else "warning: cancellation risk"
+            self.phase_safety_label.setText(f"Phase Correlation: {corr:+.2f} ({status})")
+
+        width = abs(corr)
+        center = corr / 2.0
+        bar_brush = pg.mkBrush("#2ea043" if corr >= 0.0 else "#ff4d4f")
+        self.phase_corr_bar.setOpts(x=[center], width=[width], y0=[0.0], height=[1.0], brush=bar_brush)
+        self.phase_corr_indicator.setValue(corr)
+        self.phase_corr_value = corr
 
     def _style_spectrum_plot(
         self,
@@ -1266,6 +1365,7 @@ class MainWindow(QMainWindow):
         self.bass_history.fill(np.nan)
         self.low_mid_history.fill(np.nan)
         self._refresh_meter_curves()
+        self._update_phase_safety_meter(None)
 
     def _refresh_meter_curves(self) -> None:
         x = self.meter_history_x
@@ -1283,12 +1383,14 @@ class MainWindow(QMainWindow):
     def _wire_signals(self) -> None:
         self.toggle_safety_meters_action.toggled.connect(self.meter_box.setVisible)
         self.toggle_suggestions_action.toggled.connect(self.suggestion_box.setVisible)
+        self.toggle_phase_safety_action.toggled.connect(self.phase_safety_box.setVisible)
         self.toggle_analyze_report_action.toggled.connect(self.report_box.setVisible)
         self.toggle_safety_meters_action.toggled.connect(self._update_layout_stretches)
         self.toggle_suggestions_action.toggled.connect(self._update_layout_stretches)
         self.support_action.triggered.connect(self._open_support)
         self.meter_box.setVisible(self.toggle_safety_meters_action.isChecked())
         self.suggestion_box.setVisible(self.toggle_suggestions_action.isChecked())
+        self.phase_safety_box.setVisible(self.toggle_phase_safety_action.isChecked())
         self.report_box.setVisible(self.toggle_analyze_report_action.isChecked())
         self.open_btn.clicked.connect(self._open_track)
         self.open_ref_btn.clicked.connect(self._open_reference)
@@ -2053,6 +2155,7 @@ class MainWindow(QMainWindow):
         self._push_meter_value(self.bass_history, snapshot.bass_db)
         self._push_meter_value(self.low_mid_history, snapshot.low_mid_db)
         self._refresh_meter_curves()
+        self._update_phase_safety_meter(snapshot.correlation)
 
     def _reset_suggestion_history(self, header_text: str) -> None:
         """Clear suggestion event history and show starter text."""
