@@ -204,9 +204,16 @@ class MainWindow(QMainWindow):
         self.stop_btn.setToolTip("Stop")
         self.stop_btn.setAccessibleName("Stop")
         self.stop_btn.setFixedSize(QSize(44, 32))
+        self.reset_btn = QPushButton("Reset")
+        self.reset_btn.setToolTip("Reset system analysis markers")
+        self.reset_btn.setAccessibleName("Reset analysis")
+        self.reset_btn.setFixedSize(QSize(58, 32))
+        self.reset_btn.setVisible(False)
+        self.reset_btn.setEnabled(False)
         row.addWidget(self.play_btn)
         row.addWidget(self.pause_btn)
         row.addWidget(self.stop_btn)
+        row.addWidget(self.reset_btn)
         self.seek_slider = QSlider(Qt.Orientation.Horizontal)
         self.seek_slider.setRange(0, 1000)
         self.time_label = QLabel("00:00 / 00:00")
@@ -861,6 +868,8 @@ class MainWindow(QMainWindow):
             self.seek_slider.setEnabled(True)
             self.pause_btn.setVisible(True)
             self.pause_btn.setEnabled(True)
+            self.reset_btn.setVisible(False)
+            self.reset_btn.setEnabled(False)
             self._set_mode_message("", "")
             self.mode_import_btn.setChecked(True)
             active_track = self._active_track()
@@ -874,6 +883,8 @@ class MainWindow(QMainWindow):
             self.seek_slider.setEnabled(False)
             self.pause_btn.setVisible(False)
             self.pause_btn.setEnabled(False)
+            self.reset_btn.setVisible(False)
+            self.reset_btn.setEnabled(False)
             self._set_mode_message("Ready", "Live Input captures the default microphone/input device.")
             self.mode_live_btn.setChecked(True)
             self._reset_analysis_state(clear_history=True)
@@ -889,6 +900,8 @@ class MainWindow(QMainWindow):
             self.seek_slider.setEnabled(False)
             self.pause_btn.setVisible(False)
             self.pause_btn.setEnabled(False)
+            self.reset_btn.setVisible(True)
+            self.reset_btn.setEnabled(True)
             self.mode_system_btn.setChecked(True)
             self._reset_analysis_state(clear_history=True)
             self.metrics = MetricsEngine(LIVE_SAMPLERATE)
@@ -1284,6 +1297,7 @@ class MainWindow(QMainWindow):
         self.play_btn.clicked.connect(self._on_play_clicked)
         self.pause_btn.clicked.connect(self._on_pause_clicked)
         self.stop_btn.clicked.connect(self._on_stop_clicked)
+        self.reset_btn.clicked.connect(self._on_reset_clicked)
         self.seek_slider.sliderReleased.connect(self._on_seek)
         self.analyze_btn.clicked.connect(self._manual_analyze)
         self.tp_spin.valueChanged.connect(self.coach.set_true_peak_target)
@@ -1380,21 +1394,7 @@ class MainWindow(QMainWindow):
         self.player.load_track(track)
         self._set_time_label(0.0, track.duration_s)
 
-    def _reset_analysis_state(self, clear_history: bool = False) -> None:
-        self.last_snapshot = None
-        self.last_chunk_mono = np.zeros(4096, dtype=np.float32)
-        if clear_history:
-            self.analysis_history.clear()
-
-        self.report_panel.setPlainText(
-            "Analyze report reset. Play audio and click 'Analyze Heard Audio'."
-        )
-        self._reset_suggestion_history(
-            "Do this now:\n- Play audio to start live coaching."
-        )
-        self.seek_slider.setValue(0)
-        self._set_time_label(0.0, 0.0)
-
+    def _reset_analysis_labels(self) -> None:
         self.lufs_i_label.setText("I: -- LUFS")
         self.lufs_s_label.setText("S: -- LUFS")
         self.lufs_m_label.setText("M: -- LUFS")
@@ -1402,10 +1402,13 @@ class MainWindow(QMainWindow):
         self.true_peak_label.setText("True Peak: -- dBTP")
         self.stereo_label.setText("Width/Correlation: --")
         self.low_end_label.setText("Sub/Bass/Low-mid: --")
-        self._reset_meter_histories()
-        self.target_curve_low = np.array([], dtype=np.float32)
-        self.target_curve_mid = np.array([], dtype=np.float32)
-        self.target_curve_high = np.array([], dtype=np.float32)
+
+    def _clear_spectrum_visuals(self, clear_target_curves: bool) -> None:
+        if clear_target_curves:
+            self.target_curve_low = np.array([], dtype=np.float32)
+            self.target_curve_mid = np.array([], dtype=np.float32)
+            self.target_curve_high = np.array([], dtype=np.float32)
+
         self.last_spectrum_low_centers = np.array([], dtype=np.float32)
         self.last_spectrum_low_magnitudes = np.array([], dtype=np.float32)
         self.last_spectrum_low_peaks = np.array([], dtype=np.float32)
@@ -1425,7 +1428,6 @@ class MainWindow(QMainWindow):
         self.avg_spectrum_mid_count = 0
         self.avg_spectrum_high_count = 0
 
-        # Clear all three spectrum plots
         self.spectrum_plot_low.removeItem(self.spectrum_bars_low)
         self.spectrum_bars_low = pg.BarGraphItem(x=[], height=[], width=[])
         self.spectrum_plot_low.addItem(self.spectrum_bars_low)
@@ -1437,7 +1439,8 @@ class MainWindow(QMainWindow):
         self.spectrum_max_caps_low = pg.BarGraphItem(x=[], y0=[], height=[], width=[])
         self.spectrum_max_caps_low.setZValue(25)
         self.spectrum_plot_low.addItem(self.spectrum_max_caps_low)
-        self.spectrum_avg_curve_low.setData([], [])
+        if clear_target_curves:
+            self.spectrum_avg_curve_low.setData([], [])
         self.spectrum_avg_peaks_curve_low.setData([], [])
 
         self.spectrum_plot_mid.removeItem(self.spectrum_bars_mid)
@@ -1451,7 +1454,8 @@ class MainWindow(QMainWindow):
         self.spectrum_max_caps_mid = pg.BarGraphItem(x=[], y0=[], height=[], width=[])
         self.spectrum_max_caps_mid.setZValue(25)
         self.spectrum_plot_mid.addItem(self.spectrum_max_caps_mid)
-        self.spectrum_avg_curve_mid.setData([], [])
+        if clear_target_curves:
+            self.spectrum_avg_curve_mid.setData([], [])
         self.spectrum_avg_peaks_curve_mid.setData([], [])
 
         self.spectrum_plot_high.removeItem(self.spectrum_bars_high)
@@ -1465,10 +1469,63 @@ class MainWindow(QMainWindow):
         self.spectrum_max_caps_high = pg.BarGraphItem(x=[], y0=[], height=[], width=[])
         self.spectrum_max_caps_high.setZValue(25)
         self.spectrum_plot_high.addItem(self.spectrum_max_caps_high)
-        self.spectrum_avg_curve_high.setData([], [])
+        if clear_target_curves:
+            self.spectrum_avg_curve_high.setData([], [])
         self.spectrum_avg_peaks_curve_high.setData([], [])
-        
         self.spectrum_readout_label.setText("Spectrum readout: hover over bars")
+
+    def _reset_metrics_for_current_input(self) -> None:
+        if self._input_mode == "live":
+            self.metrics = MetricsEngine(LIVE_SAMPLERATE)
+        elif self._input_mode == "system":
+            self.metrics = MetricsEngine(self._system.samplerate)
+        else:
+            track = self._active_track()
+            if track is not None:
+                self.metrics = MetricsEngine(track.samplerate)
+
+    def _restart_analysis_from_now(
+        self,
+        suggestion_header: str,
+        *,
+        clear_target_curves: bool,
+        reset_time_display: bool,
+        clear_history: bool = False,
+    ) -> None:
+        self._reset_metrics_for_current_input()
+        if self.spectrum_low is not None:
+            self.spectrum_low.reset_state()
+        if self.spectrum_mid is not None:
+            self.spectrum_mid.reset_state()
+        if self.spectrum_high is not None:
+            self.spectrum_high.reset_state()
+
+        self.last_snapshot = None
+        self.last_chunk_mono.fill(0.0)
+        self.force_spectrum_silence = True
+        if clear_history:
+            self.analysis_history.clear()
+
+        self.report_panel.setPlainText(
+            "Analyze report reset. Play audio and click 'Analyze Heard Audio'."
+        )
+        self._reset_suggestion_history(suggestion_header)
+        if reset_time_display:
+            self.seek_slider.setValue(0)
+            self._set_time_label(0.0, 0.0)
+
+        self._reset_analysis_labels()
+        self._reset_meter_histories()
+        self._clear_spectrum_visuals(clear_target_curves)
+
+    def _reset_analysis_state(self, clear_history: bool = False) -> None:
+        self.last_chunk_mono = np.zeros(4096, dtype=np.float32)
+        self._restart_analysis_from_now(
+            "Do this now:\n- Play audio to start live coaching.",
+            clear_target_curves=True,
+            reset_time_display=True,
+            clear_history=clear_history,
+        )
 
     def _level_match_reference(self, main: AudioTrack, ref: AudioTrack) -> AudioTrack:
         main_loud = self._rms_db(main.samples)
@@ -1884,6 +1941,15 @@ class MainWindow(QMainWindow):
             self.spectrum_avg_peaks_curve_high.setData([], [])
         self._reset_meter_histories()
 
+    def _on_reset_clicked(self) -> None:
+        if self._input_mode != "system":
+            return
+        self._restart_analysis_from_now(
+            "System capture analysis restarted. Listening from this moment...",
+            clear_target_curves=False,
+            reset_time_display=False,
+        )
+
     def _on_play_clicked(self) -> None:
         if self._input_mode == "live":
             self._activate_live_input()
@@ -1932,14 +1998,7 @@ class MainWindow(QMainWindow):
 
     def _reset_analysis_for_new_playback(self) -> None:
         """Start each playback/capture run with fresh analysis metrics and overlays."""
-        if self._input_mode == "live":
-            self.metrics = MetricsEngine(LIVE_SAMPLERATE)
-        elif self._input_mode == "system":
-            self.metrics = MetricsEngine(self._system.samplerate)
-        else:
-            track = self._active_track()
-            if track is not None:
-                self.metrics = MetricsEngine(track.samplerate)
+        self._reset_metrics_for_current_input()
 
         if self.spectrum_low is not None:
             self.spectrum_low.reset_state()
@@ -1967,13 +2026,7 @@ class MainWindow(QMainWindow):
         self.spectrum_avg_peaks_curve_high.setData([], [])
 
         self._reset_meter_histories()
-        self.lufs_i_label.setText("I: -- LUFS")
-        self.lufs_s_label.setText("S: -- LUFS")
-        self.lufs_m_label.setText("M: -- LUFS")
-        self.sample_peak_label.setText("Sample Peak: -- dBFS")
-        self.true_peak_label.setText("True Peak: -- dBTP")
-        self.stereo_label.setText("Width/Correlation: --")
-        self.low_end_label.setText("Sub/Bass/Low-mid: --")
+        self._reset_analysis_labels()
 
     def _update_meter_labels(self, snapshot: AnalysisSnapshot) -> None:
         self.lufs_i_label.setText(f"I: {snapshot.lufs_integrated:.1f} LUFS")
