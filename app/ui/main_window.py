@@ -4,8 +4,8 @@ from pathlib import Path
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import QEvent, QTimer, Qt, QSize
-from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPixmap
+from PySide6.QtCore import QEvent, QTimer, Qt, QSize, QUrl
+from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QButtonGroup,
@@ -568,6 +568,10 @@ class MainWindow(QMainWindow):
         self.toggle_analyze_report_action.setCheckable(True)
         self.toggle_analyze_report_action.setChecked(False)
         self.view_menu.addAction(self.toggle_analyze_report_action)
+
+        self.help_menu = self.menuBar().addMenu("Help")
+        self.support_action = QAction("Support", self)
+        self.help_menu.addAction(self.support_action)
 
     def _apply_theme(self) -> None:
         self.setStyleSheet(
@@ -1269,6 +1273,7 @@ class MainWindow(QMainWindow):
         self.toggle_analyze_report_action.toggled.connect(self.report_box.setVisible)
         self.toggle_safety_meters_action.toggled.connect(self._update_layout_stretches)
         self.toggle_suggestions_action.toggled.connect(self._update_layout_stretches)
+        self.support_action.triggered.connect(self._open_support)
         self.meter_box.setVisible(self.toggle_safety_meters_action.isChecked())
         self.suggestion_box.setVisible(self.toggle_suggestions_action.isChecked())
         self.report_box.setVisible(self.toggle_analyze_report_action.isChecked())
@@ -2276,6 +2281,9 @@ class MainWindow(QMainWindow):
             return
         if msg:
             self._show_error(msg)
+
+    def _open_support(self) -> None:
+        QDesktopServices.openUrl(QUrl("https://github.com/spatek01/halfdeaf/blob/main/README.md"))
 
     def _show_error(self, message: str) -> None:
         QMessageBox.critical(self, "Error", message)
