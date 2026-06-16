@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 
 import numpy as np
@@ -22,6 +23,9 @@ class AnalysisSnapshot:
     bass_db: float
     low_mid_db: float
     mids_db: float
+    crest_factor_db: float
+    dynamic_range_db: float
+    dynamics_ready: bool
 
 
 class LUFSMeter:
@@ -68,6 +72,7 @@ class MetricsEngine:
         self.total_samples = 0
         self.max_sample_peak = 0.0
         self.max_true_peak = 0.0
+        self.floor_rms_history: deque[float] = deque(maxlen=320)
 
     def update(self, chunk: np.ndarray) -> AnalysisSnapshot:
         if chunk.ndim == 1:
@@ -83,6 +88,21 @@ class MetricsEngine:
 
         sample_peak = float(np.max(np.abs(chunk)))
         self.max_sample_peak = max(self.max_sample_peak, sample_peak)
+
+        rms = float(np.sqrt(np.mean(mono * mono) + 1e-12))
+        self.floor_rms_history.append(rms)
+
+        peak_db = self._to_db(sample_peak)
+        rms_db = self._to_db(rms)
+        crest_factor_db = max(0.0, peak_db - rms_db)
+
+        dynamics_ready = len(self.floor_rms_history) >= 16 and (self.total_samples / self.samplerate) >= 1.2
+        if dynamics_ready:
+            floor_rms = float(np.percentile(np.array(self.floor_rms_history, dtype=np.float32), 10.0))
+            floor_db = self._to_db(floor_rms)
+            dynamic_range_db = max(0.0, peak_db - floor_db)
+        else:
+            dynamic_range_db = float("nan")
 
         up = resample_poly(mono, 4, 1)
         true_peak = float(np.max(np.abs(up)))
@@ -111,6 +131,9 @@ class MetricsEngine:
             bass_db=bass,
             low_mid_db=low_mid,
             mids_db=mids,
+            crest_factor_db=crest_factor_db,
+            dynamic_range_db=dynamic_range_db,
+            dynamics_ready=dynamics_ready,
         )
 
     def reset(self) -> None:
@@ -119,6 +142,7 @@ class MetricsEngine:
         self.total_samples = 0
         self.max_sample_peak = 0.0
         self.max_true_peak = 0.0
+        self.floor_rms_history.clear()
 
     def _to_db(self, v: float) -> float:
         return 20.0 * np.log10(max(v, 1e-9))

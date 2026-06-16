@@ -83,6 +83,25 @@ class SafeMasteringCoach:
             actions.append("Lower master gain by 0.8 dB. Add headroom for safer limiting.")
             score -= 8.0
 
+        crest_low, crest_high = self._crest_band_for_genre()
+        if snapshot.crest_factor_db < crest_low:
+            issues.append("Crest factor is low for this genre target.")
+            actions.append(
+                f"Ease limiting or compression to keep crest factor near {crest_low:.1f}-{crest_high:.1f} dB."
+            )
+            score -= 10.0
+        elif snapshot.crest_factor_db > crest_high:
+            issues.append("Crest factor is high for this genre target.")
+            actions.append(
+                f"Add gentle bus control to keep crest factor near {crest_low:.1f}-{crest_high:.1f} dB."
+            )
+            score -= 7.0
+
+        if snapshot.dynamics_ready and snapshot.dynamic_range_db < 6.0:
+            issues.append("Dynamic range is very low and may sound over-compressed.")
+            actions.append("Back off limiter drive or reduce compression depth to restore movement.")
+            score -= 10.0
+
         if not issues:
             issues.append("No major risks detected in the analyzed audio.")
             actions.append("Hold settings. Your current balance is within safe targets.")
@@ -99,3 +118,20 @@ class SafeMasteringCoach:
             confidence_note=confidence,
             score=max(0.0, score),
         )
+
+    def _crest_band_for_genre(self) -> tuple[float, float]:
+        name = self.genre.name.lower()
+        if "jazz" in name or "classical" in name:
+            return 14.0, 20.0
+        if "rock" in name or "pop" in name:
+            return 8.0, 11.0
+        if (
+            "edm" in name
+            or "dubstep" in name
+            or "house" in name
+            or "techno" in name
+            or "trance" in name
+            or "minimal" in name
+        ):
+            return 5.0, 7.0
+        return 8.0, 12.0
