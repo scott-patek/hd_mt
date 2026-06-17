@@ -64,6 +64,11 @@ class MainWindow(QMainWindow):
         self.reference_track: AudioTrack | None = None
         self.active_mode = "A"
         self._input_mode: str = "import"
+        self._source_connected = {
+            "player": False,
+            "live": False,
+            "system": False,
+        }
 
         self.metrics: MetricsEngine | None = None
         self.spectrum_low: SpectrumAnalyzer | None = None
@@ -1005,7 +1010,20 @@ class MainWindow(QMainWindow):
     # Source connection helpers & mode switching
     # ------------------------------------------------------------------
 
+    def _source_key(self, src: object) -> str | None:
+        if src is self.player:
+            return "player"
+        if src is self._live:
+            return "live"
+        if src is self._system:
+            return "system"
+        return None
+
     def _connect_source(self, src: object) -> None:
+        source_key = self._source_key(src)
+        if source_key is not None and self._source_connected[source_key]:
+            return
+
         src.chunk_available.connect(self._on_chunk)
         src.position_changed.connect(self._on_position)
         src.playback_stopped.connect(self._on_playback_stopped)
@@ -1013,7 +1031,14 @@ class MainWindow(QMainWindow):
         if hasattr(src, "state_changed"):
             src.state_changed.connect(self._on_live_state_changed)
 
+        if source_key is not None:
+            self._source_connected[source_key] = True
+
     def _disconnect_source(self, src: object) -> None:
+        source_key = self._source_key(src)
+        if source_key is not None and not self._source_connected[source_key]:
+            return
+
         for sig, slot in [
             (src.chunk_available, self._on_chunk),
             (src.position_changed, self._on_position),
@@ -1022,13 +1047,16 @@ class MainWindow(QMainWindow):
         ]:
             try:
                 sig.disconnect(slot)
-            except RuntimeError:
+            except (RuntimeError, TypeError):
                 pass
         if hasattr(src, "state_changed"):
             try:
                 src.state_changed.disconnect(self._on_live_state_changed)
-            except RuntimeError:
+            except (RuntimeError, TypeError):
                 pass
+
+        if source_key is not None:
+            self._source_connected[source_key] = False
 
     def _set_mode(self, mode: str) -> None:
         """Switch between import, live input, and system output modes."""

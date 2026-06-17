@@ -106,17 +106,24 @@ def main():
     os.chdir(repo_root)
 
     if sys.platform == "darwin":
-        app_bundle = repo_root / "dist" / "Half Deaf Mastering Tool.app"
-        if not app_bundle.exists():
-            print("📦 Building macOS app bundle (first run only)...")
-            run_command([str(python_bin), "setup.py", "py2app", "-A"], cwd=str(repo_root))
-
-        # Launch via app bundle so macOS shows the real app title instead of "Python".
-        run_command(["open", str(app_bundle)])
+        # On macOS, launch detached so the shell prompt returns immediately.
+        subprocess.Popen(
+            ["Half Deaf Mastering Tool", "run_app.py"],
+            executable=str(python_bin),
+            cwd=str(repo_root),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        print("   ✓ App launched in background")
         return
 
-    # Non-macOS: replace this process with the app process.
-    os.execv(str(python_bin), [str(python_bin), "run_app.py"])
+    # Always run from source with the active venv.
+    # This avoids stale dist/app-bundle environments and keeps dependency behavior consistent.
+    argv0 = str(python_bin)
+    if sys.platform == "darwin":
+        argv0 = "Half Deaf Mastering Tool"
+    os.execv(str(python_bin), [argv0, "run_app.py"])
 
 
 if __name__ == "__main__":
