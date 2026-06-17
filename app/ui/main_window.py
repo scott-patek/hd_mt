@@ -40,6 +40,7 @@ from app.audio.live_input import (
     SystemOutputCapture,
     system_capture_setup_hint,
 )
+from app.macos_identity import APP_NAME, reassert_macos_app_identity
 from app.audio.player import AudioPlayer
 from app.coaching.coach import SafeMasteringCoach
 
@@ -1686,6 +1687,11 @@ class MainWindow(QMainWindow):
             self.root_layout.setStretch(1, self.center_initial_stretch + self.suggestions_stretch)
             self.root_layout.setStretch(2, 0)
 
+    def _reassert_macos_identity_after_native_dialog(self) -> None:
+        # QFileDialog can trigger a native menu refresh when focus returns.
+        QTimer.singleShot(0, lambda: reassert_macos_app_identity(APP_NAME))
+        QTimer.singleShot(150, lambda: reassert_macos_app_identity(APP_NAME))
+
     def _open_track(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self,
@@ -1693,6 +1699,7 @@ class MainWindow(QMainWindow):
             "",
             "Media (*.wav *.mp3 *.flac *.ogg *.aiff *.aif *.m4a *.mp4 *.mov *.mkv *.m4v)",
         )
+        self._reassert_macos_identity_after_native_dialog()
         if not path:
             return
 
@@ -1715,6 +1722,7 @@ class MainWindow(QMainWindow):
             "",
             "Audio (*.wav *.mp3 *.flac *.ogg *.aiff *.aif *.m4a)",
         )
+        self._reassert_macos_identity_after_native_dialog()
         if not path:
             return
 
