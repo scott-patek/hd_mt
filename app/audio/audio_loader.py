@@ -9,7 +9,14 @@ from typing import Optional
 
 import ffmpeg
 import numpy as np
-import soundfile as sf
+
+try:
+    import soundfile as sf
+except Exception as exc:  # pragma: no cover
+    sf = None
+    _SOUNDFILE_IMPORT_ERROR = exc
+else:
+    _SOUNDFILE_IMPORT_ERROR = None
 
 try:
     from pydub import AudioSegment
@@ -54,7 +61,7 @@ class AudioLoader:
         ext = src.suffix.lower()
         if ext in VIDEO_EXTENSIONS:
             wav_path = self._extract_audio_to_wav(file_path)
-            samples, sr = self._read_with_soundfile(wav_path)
+            samples, sr = self._decode_audio_file(wav_path)
             return AudioTrack(
                 path=file_path,
                 samples=samples,
@@ -86,13 +93,20 @@ class AudioLoader:
     def _decode_audio_file(self, file_path: str) -> tuple[np.ndarray, int]:
         try:
             return self._read_with_soundfile(file_path)
-        except Exception:
+        except Exception as sf_exc:
             if AudioSegment is None:
                 raise RuntimeError(
                     "Could not decode this file with soundfile. "
                     "Install pydub for fallback decoding and ensure ffmpeg is installed."
-                )
-            segment = AudioSegment.from_file(file_path)
+                ) from sf_exc
+            try:
+                segment = AudioSegment.from_file(file_path)
+            except Exception as pydub_exc:
+                raise RuntimeError(
+                    "Could not decode this file. "
+                    f"soundfile error: {sf_exc}. "
+                    f"pydub/ffmpeg error: {pydub_exc}."
+                ) from pydub_exc
             sr = int(segment.frame_rate)
             channels = int(segment.channels)
             raw = np.array(segment.get_array_of_samples(), dtype=np.float32)
@@ -102,6 +116,11 @@ class AudioLoader:
             return raw, sr
 
     def _read_with_soundfile(self, file_path: str) -> tuple[np.ndarray, int]:
+        if sf is None:
+            raise RuntimeError(
+                "soundfile backend unavailable (libsndfile may be missing). "
+                f"Details: {_SOUNDFILE_IMPORT_ERROR}"
+            )
         data, sr = sf.read(file_path, dtype="float32", always_2d=True)
         if data.shape[1] == 1:
             data = data[:, 0]
