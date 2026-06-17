@@ -84,6 +84,11 @@ class MainWindow(QMainWindow):
         self.sub_history = np.full(self.meter_history_len, np.nan, dtype=np.float32)
         self.bass_history = np.full(self.meter_history_len, np.nan, dtype=np.float32)
         self.low_mid_history = np.full(self.meter_history_len, np.nan, dtype=np.float32)
+        self.crest_factor_history = np.full(self.meter_history_len, np.nan, dtype=np.float32)
+        self.dynamic_range_history = np.full(self.meter_history_len, np.nan, dtype=np.float32)
+        self.dynamics_violation_history = np.zeros(self.meter_history_len, dtype=np.int8)
+        self.dynamics_total_frames = 0
+        self.dynamics_out_frames = 0
 
         self.analysis_history: dict[str, list[float]] = {}
         self.last_spectrum_low_centers = np.array([], dtype=np.float32)
@@ -579,6 +584,123 @@ class MainWindow(QMainWindow):
         phase_layout.addWidget(self.phase_safety_plot)
         self._update_phase_safety_meter(None)
 
+        self.dynamics_box = QGroupBox("Crest Factor and Dynamic Range")
+        dynamics_layout = QGridLayout(self.dynamics_box)
+        dynamics_layout.setVerticalSpacing(5)
+        self.crest_factor_label = QLabel("Crest Factor: -- dB")
+        self.dynamic_range_label = QLabel("Dynamic Range: -- dB")
+        self.crest_status_label = QLabel("Crest Status: --")
+        self.dynamic_status_label = QLabel("Dynamics Status: --")
+        self.crest_status_label.setStyleSheet("padding: 2px 8px; border-radius: 10px; color: #d0d7de;")
+        self.dynamic_status_label.setStyleSheet("padding: 2px 8px; border-radius: 10px; color: #d0d7de;")
+        self.dynamics_hint_label = QLabel(
+            "Target by genre: EDM 5-7 dB | Rock/Pop 8-11 dB | Jazz/Classical 14+ dB"
+        )
+        self.dynamics_hint_label.setStyleSheet("color: #8b949e; font-size: 10px;")
+
+        self.crest_plot = self._create_meter_plot(y_min=0.0, y_max=1.0)
+        self.crest_plot.setBackground(None)
+        self.crest_plot.viewport().setAutoFillBackground(False)
+        self.crest_plot.setStyleSheet("background: transparent; border: none;")
+        self.crest_plot.setXRange(0.0, 24.0, padding=0.0)
+        self.crest_plot.setFixedHeight(52)
+        self.crest_plot.plotItem.showAxis("bottom")
+        crest_axis = self.crest_plot.getAxis("bottom")
+        crest_axis.setTickFont(QFont("Menlo", 8))
+        crest_axis.setTextPen(pg.mkPen("#9aa4ad"))
+        crest_axis.setTicks([[(0.0, "0"), (6.0, "6"), (12.0, "12"), (18.0, "18"), (24.0, "24 dB")]])
+        self.crest_target_band = pg.BarGraphItem(
+            x=[0.0],
+            y0=[0.0],
+            height=[1.0],
+            width=[0.0],
+            brush=pg.mkBrush(46, 160, 67, 45),
+            pen=pg.mkPen(width=0),
+        )
+        self.crest_target_low = pg.InfiniteLine(pos=0.0, angle=90, pen=pg.mkPen("#ffb86b", width=1))
+        self.crest_target_high = pg.InfiniteLine(pos=0.0, angle=90, pen=pg.mkPen("#ffb86b", width=1))
+        self.crest_target_mid = pg.InfiniteLine(
+            pos=0.0,
+            angle=90,
+            pen=pg.mkPen("#2ea043", width=1, style=Qt.PenStyle.DashLine),
+        )
+        self.crest_target_band.setZValue(4)
+        self.crest_target_low.setZValue(5)
+        self.crest_target_high.setZValue(5)
+        self.crest_target_mid.setZValue(5)
+        self.crest_plot.addItem(self.crest_target_band)
+        self.crest_plot.addItem(self.crest_target_low)
+        self.crest_plot.addItem(self.crest_target_high)
+        self.crest_plot.addItem(self.crest_target_mid)
+        self.crest_value_bar = pg.BarGraphItem(
+            x=[0.0],
+            y0=[0.0],
+            height=[1.0],
+            width=[0.5],
+            brush=pg.mkBrush("#ff9e64"),
+            pen=pg.mkPen(width=0),
+        )
+        self.crest_value_bar.setZValue(15)
+        self.crest_plot.addItem(self.crest_value_bar)
+
+        self.dynamic_range_plot = self._create_meter_plot(y_min=0.0, y_max=1.0)
+        self.dynamic_range_plot.setBackground(None)
+        self.dynamic_range_plot.viewport().setAutoFillBackground(False)
+        self.dynamic_range_plot.setStyleSheet("background: transparent; border: none;")
+        self.dynamic_range_plot.setXRange(0.0, 60.0, padding=0.0)
+        self.dynamic_range_plot.setFixedHeight(52)
+        self.dynamic_range_plot.plotItem.showAxis("bottom")
+        dynamic_axis = self.dynamic_range_plot.getAxis("bottom")
+        dynamic_axis.setTickFont(QFont("Menlo", 8))
+        dynamic_axis.setTextPen(pg.mkPen("#9aa4ad"))
+        dynamic_axis.setTicks([[(0.0, "0"), (15.0, "15"), (30.0, "30"), (45.0, "45"), (60.0, "60 dB")]])
+        self.dynamic_target_band = pg.BarGraphItem(
+            x=[0.0],
+            y0=[0.0],
+            height=[1.0],
+            width=[0.0],
+            brush=pg.mkBrush(88, 166, 255, 40),
+            pen=pg.mkPen(width=0),
+        )
+        self.dynamic_target_low = pg.InfiniteLine(pos=0.0, angle=90, pen=pg.mkPen("#7dc2ff", width=1))
+        self.dynamic_target_high = pg.InfiniteLine(pos=0.0, angle=90, pen=pg.mkPen("#7dc2ff", width=1))
+        self.dynamic_target_mid = pg.InfiniteLine(
+            pos=0.0,
+            angle=90,
+            pen=pg.mkPen("#2ea043", width=1, style=Qt.PenStyle.DashLine),
+        )
+        self.dynamic_target_band.setZValue(4)
+        self.dynamic_target_low.setZValue(5)
+        self.dynamic_target_high.setZValue(5)
+        self.dynamic_target_mid.setZValue(5)
+        self.dynamic_range_plot.addItem(self.dynamic_target_band)
+        self.dynamic_range_plot.addItem(self.dynamic_target_low)
+        self.dynamic_range_plot.addItem(self.dynamic_target_high)
+        self.dynamic_range_plot.addItem(self.dynamic_target_mid)
+        self.dynamic_value_bar = pg.BarGraphItem(
+            x=[0.0],
+            y0=[0.0],
+            height=[1.0],
+            width=[1.2],
+            brush=pg.mkBrush("#58a6ff"),
+            pen=pg.mkPen(width=0),
+        )
+        self.dynamic_value_bar.setZValue(15)
+        self.dynamic_range_plot.addItem(self.dynamic_value_bar)
+
+        self.dynamics_out_target_label = QLabel("Out of Target (window): -- | Overall: --")
+        self.dynamics_out_target_label.setStyleSheet("color: #8b949e; font-size: 10px;")
+
+        dynamics_layout.addWidget(self.crest_factor_label, 0, 0)
+        dynamics_layout.addWidget(self.dynamic_range_label, 0, 1)
+        dynamics_layout.addWidget(self.crest_status_label, 1, 0)
+        dynamics_layout.addWidget(self.dynamic_status_label, 1, 1)
+        dynamics_layout.addWidget(self.crest_plot, 2, 0)
+        dynamics_layout.addWidget(self.dynamic_range_plot, 2, 1)
+        dynamics_layout.addWidget(self.dynamics_out_target_label, 3, 0, 1, 2)
+        dynamics_layout.addWidget(self.dynamics_hint_label, 4, 0, 1, 2)
+        self._update_dynamics_target_overlays()
+
         self.report_panel = QTextEdit()
         self.report_panel.setReadOnly(True)
 
@@ -591,9 +713,11 @@ class MainWindow(QMainWindow):
         self._install_panel_close_button(self.meter_box, self._hide_safety_meters)
         self._install_panel_close_button(self.suggestion_box, self._hide_suggestions)
         self._install_panel_close_button(self.phase_safety_box, self._hide_phase_safety)
+        self._install_panel_close_button(self.dynamics_box, self._hide_dynamics)
         self._install_panel_close_button(self.report_box, self._hide_analyze_report)
 
         center_layout.addWidget(self.phase_safety_box)
+        center_layout.addWidget(self.dynamics_box)
         center_layout.addWidget(self.spectrum_box_low, 3)
         center_layout.addWidget(self.spectrum_box_mid, 3)
         center_layout.addWidget(self.spectrum_box_high, 3)
@@ -613,6 +737,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(root)
         self._apply_theme()
         self.meter_box.setVisible(False)
+        self.dynamics_box.setVisible(False)
         self.report_box.setVisible(False)
 
     def _build_view_menu(self) -> None:
@@ -630,6 +755,10 @@ class MainWindow(QMainWindow):
         self.toggle_phase_safety_action.setCheckable(True)
         self.toggle_phase_safety_action.setChecked(False)
         self.view_menu.addAction(self.toggle_phase_safety_action)
+        self.toggle_dynamics_action = QAction("Show Crest and Dynamic Range Meters", self)
+        self.toggle_dynamics_action.setCheckable(True)
+        self.toggle_dynamics_action.setChecked(False)
+        self.view_menu.addAction(self.toggle_dynamics_action)
         self.toggle_analyze_report_action = QAction("Show Analyze Report", self)
         self.toggle_analyze_report_action.setCheckable(True)
         self.toggle_analyze_report_action.setChecked(False)
@@ -1176,6 +1305,9 @@ class MainWindow(QMainWindow):
     def _hide_phase_safety(self) -> None:
         self.toggle_phase_safety_action.setChecked(False)
 
+    def _hide_dynamics(self) -> None:
+        self.toggle_dynamics_action.setChecked(False)
+
     def _hide_analyze_report(self) -> None:
         self.toggle_analyze_report_action.setChecked(False)
 
@@ -1231,6 +1363,80 @@ class MainWindow(QMainWindow):
         self.phase_corr_bar.setOpts(x=[center], width=[width], y0=[0.0], height=[1.0], brush=bar_brush)
         self.phase_corr_indicator.setValue(corr)
         self.phase_corr_value = corr
+
+    def _dynamics_target_ranges(self, genre_key: str | None) -> tuple[tuple[float, float], tuple[float, float], str]:
+        key = (genre_key or "house").lower()
+        if key == "house":
+            return (5.0, 7.0), (10.0, 20.0), "House"
+        if key == "deep_house":
+            return (6.0, 8.0), (12.0, 22.0), "Deep House"
+        if key == "progressive_house":
+            return (7.0, 9.0), (14.0, 24.0), "Progressive House"
+        if key == "tech_house":
+            return (5.0, 7.0), (10.0, 19.0), "Tech House"
+        if key == "minimal":
+            return (4.0, 6.0), (9.0, 18.0), "Minimal"
+        if key == "techno":
+            return (5.0, 7.0), (11.0, 20.0), "Techno"
+        if key in {"jazz", "classical", "orchestral"}:
+            return (14.0, 20.0), (20.0, 40.0), "Jazz/Classical"
+        if key in {"rock", "pop", "indie", "alt_rock"}:
+            return (8.0, 11.0), (14.0, 24.0), "Rock/Pop"
+        return (5.0, 7.0), (10.0, 20.0), "EDM"
+
+    def _set_status_badge(self, label: QLabel, prefix: str, status: str) -> None:
+        color_map = {
+            "Punchy": (46, 160, 67),
+            "Dense": (210, 153, 34),
+            "Squashed": (255, 77, 79),
+            "--": (88, 98, 115),
+        }
+        r, g, b = color_map.get(status, (88, 98, 115))
+        label.setText(f"{prefix}: {status}")
+        label.setStyleSheet(
+            "padding: 2px 8px; border-radius: 10px; color: #0d1117;"
+            f"background: rgba({r}, {g}, {b}, 230);"
+        )
+
+    def _status_for_value(self, value: float, low: float, high: float, *, ready: bool = True) -> str:
+        if not ready or not np.isfinite(value):
+            return "--"
+        if value < (low - 1.0):
+            return "Squashed"
+        if value < low:
+            return "Dense"
+        if value <= high:
+            return "Punchy"
+        return "Dense"
+
+    def _update_dynamics_target_overlays(self) -> None:
+        crest_range, dynamic_range, family = self._dynamics_target_ranges(self.genre_combo.currentData())
+        crest_low, crest_high = crest_range
+        dynamic_low, dynamic_high = dynamic_range
+
+        self.crest_target_band.setOpts(
+            x=[(crest_low + crest_high) * 0.5],
+            y0=[0.0],
+            height=[1.0],
+            width=[crest_high - crest_low],
+        )
+        self.crest_target_low.setValue(crest_low)
+        self.crest_target_high.setValue(crest_high)
+        self.crest_target_mid.setValue((crest_low + crest_high) * 0.5)
+
+        self.dynamic_target_band.setOpts(
+            x=[(dynamic_low + dynamic_high) * 0.5],
+            y0=[0.0],
+            height=[1.0],
+            width=[dynamic_high - dynamic_low],
+        )
+        self.dynamic_target_low.setValue(dynamic_low)
+        self.dynamic_target_high.setValue(dynamic_high)
+        self.dynamic_target_mid.setValue((dynamic_low + dynamic_high) * 0.5)
+
+        self.dynamics_hint_label.setText(
+            f"Target family: {family} | Crest {crest_low:.0f}-{crest_high:.0f} dB | Dynamic {dynamic_low:.0f}-{dynamic_high:.0f} dB"
+        )
 
     def _style_spectrum_plot(
         self,
@@ -1364,6 +1570,11 @@ class MainWindow(QMainWindow):
         self.sub_history.fill(np.nan)
         self.bass_history.fill(np.nan)
         self.low_mid_history.fill(np.nan)
+        self.crest_factor_history.fill(np.nan)
+        self.dynamic_range_history.fill(np.nan)
+        self.dynamics_violation_history.fill(0)
+        self.dynamics_total_frames = 0
+        self.dynamics_out_frames = 0
         self._refresh_meter_curves()
         self._update_phase_safety_meter(None)
 
@@ -1380,10 +1591,28 @@ class MainWindow(QMainWindow):
         self.bass_curve.setData(x, self.bass_history)
         self.low_mid_curve.setData(x, self.low_mid_history)
 
+        crest_latest = self.crest_factor_history[~np.isnan(self.crest_factor_history)]
+        dynamic_latest = self.dynamic_range_history[~np.isnan(self.dynamic_range_history)]
+        crest_value = float(crest_latest[-1]) if crest_latest.size else 0.0
+        dynamic_value = float(dynamic_latest[-1]) if dynamic_latest.size else 0.0
+        self.crest_value_bar.setOpts(x=[crest_value], y0=[0.0], height=[1.0], width=[0.5])
+        self.dynamic_value_bar.setOpts(x=[dynamic_value], y0=[0.0], height=[1.0], width=[1.2])
+
+        out_target_pct = float(np.mean(self.dynamics_violation_history > 0) * 100.0)
+        overall_out_target_pct = (
+            (self.dynamics_out_frames / float(self.dynamics_total_frames) * 100.0)
+            if self.dynamics_total_frames > 0
+            else 0.0
+        )
+        self.dynamics_out_target_label.setText(
+            f"Out of Target (window): {out_target_pct:.0f}% | Overall: {overall_out_target_pct:.0f}%"
+        )
+
     def _wire_signals(self) -> None:
         self.toggle_safety_meters_action.toggled.connect(self.meter_box.setVisible)
         self.toggle_suggestions_action.toggled.connect(self.suggestion_box.setVisible)
         self.toggle_phase_safety_action.toggled.connect(self.phase_safety_box.setVisible)
+        self.toggle_dynamics_action.toggled.connect(self.dynamics_box.setVisible)
         self.toggle_analyze_report_action.toggled.connect(self.report_box.setVisible)
         self.toggle_safety_meters_action.toggled.connect(self._update_layout_stretches)
         self.toggle_suggestions_action.toggled.connect(self._update_layout_stretches)
@@ -1391,6 +1620,7 @@ class MainWindow(QMainWindow):
         self.meter_box.setVisible(self.toggle_safety_meters_action.isChecked())
         self.suggestion_box.setVisible(self.toggle_suggestions_action.isChecked())
         self.phase_safety_box.setVisible(self.toggle_phase_safety_action.isChecked())
+        self.dynamics_box.setVisible(self.toggle_dynamics_action.isChecked())
         self.report_box.setVisible(self.toggle_analyze_report_action.isChecked())
         self.open_btn.clicked.connect(self._open_track)
         self.open_ref_btn.clicked.connect(self._open_reference)
@@ -1504,6 +1734,10 @@ class MainWindow(QMainWindow):
         self.true_peak_label.setText("True Peak: -- dBTP")
         self.stereo_label.setText("Width/Correlation: --")
         self.low_end_label.setText("Sub/Bass/Low-mid: --")
+        self.crest_factor_label.setText("Crest Factor: -- dB")
+        self.dynamic_range_label.setText("Dynamic Range: -- dB")
+        self._set_status_badge(self.crest_status_label, "Crest Status", "--")
+        self._set_status_badge(self.dynamic_status_label, "Dynamics Status", "--")
 
     def _clear_spectrum_visuals(self, clear_target_curves: bool) -> None:
         if clear_target_curves:
@@ -1739,6 +1973,7 @@ class MainWindow(QMainWindow):
             self.target_curve_mid = self._build_house_target_curve(self.spectrum_mid.band_centers, genre_key)
         if self.spectrum_high is not None:
             self.target_curve_high = self._build_house_target_curve(self.spectrum_high.band_centers, genre_key)
+        self._update_dynamics_target_overlays()
 
     def _refresh_plots(self) -> None:
         if self.spectrum_low is None or self.spectrum_mid is None or self.spectrum_high is None:
@@ -2143,6 +2378,44 @@ class MainWindow(QMainWindow):
             "Sub/Bass/Low-mid: "
             f"{snapshot.sub_db:.1f} / {snapshot.bass_db:.1f} / {snapshot.low_mid_db:.1f} dB"
         )
+        self.crest_factor_label.setText(f"Crest Factor: {snapshot.crest_factor_db:.1f} dB")
+        if snapshot.dynamics_ready and np.isfinite(snapshot.dynamic_range_db):
+            self.dynamic_range_label.setText(f"Dynamic Range: {snapshot.dynamic_range_db:.1f} dB")
+        else:
+            self.dynamic_range_label.setText("Dynamic Range: -- dB")
+
+        crest_range, dynamic_range, _ = self._dynamics_target_ranges(self.genre_combo.currentData())
+        crest_status = self._status_for_value(snapshot.crest_factor_db, crest_range[0], crest_range[1], ready=True)
+        dynamic_status = self._status_for_value(
+            snapshot.dynamic_range_db,
+            dynamic_range[0],
+            dynamic_range[1],
+            ready=snapshot.dynamics_ready,
+        )
+        self._set_status_badge(self.crest_status_label, "Crest Status", crest_status)
+        self._set_status_badge(self.dynamic_status_label, "Dynamics Status", dynamic_status)
+
+        crest_severity = {"--": 0, "Punchy": 0, "Dense": 1, "Squashed": 2}.get(crest_status, 0)
+        dynamic_severity = {"--": 0, "Punchy": 0, "Dense": 1, "Squashed": 2}.get(dynamic_status, 0)
+        self._push_meter_value(self.dynamics_violation_history, max(crest_severity, dynamic_severity))
+        self.dynamics_total_frames += 1
+        if max(crest_severity, dynamic_severity) > 0:
+            self.dynamics_out_frames += 1
+
+        crest_brush = {
+            "Punchy": pg.mkBrush(46, 160, 67, 220),
+            "Dense": pg.mkBrush(210, 153, 34, 220),
+            "Squashed": pg.mkBrush(255, 77, 79, 220),
+            "--": pg.mkBrush(88, 98, 115, 200),
+        }.get(crest_status, pg.mkBrush(88, 98, 115, 200))
+        dynamic_brush = {
+            "Punchy": pg.mkBrush(46, 160, 67, 220),
+            "Dense": pg.mkBrush(210, 153, 34, 220),
+            "Squashed": pg.mkBrush(255, 77, 79, 220),
+            "--": pg.mkBrush(88, 98, 115, 200),
+        }.get(dynamic_status, pg.mkBrush(88, 98, 115, 200))
+        self.crest_value_bar.setOpts(brush=crest_brush)
+        self.dynamic_value_bar.setOpts(brush=dynamic_brush)
 
         self._push_meter_value(self.lufs_i_history, snapshot.lufs_integrated)
         self._push_meter_value(self.lufs_s_history, snapshot.lufs_short_term)
@@ -2154,6 +2427,11 @@ class MainWindow(QMainWindow):
         self._push_meter_value(self.sub_history, snapshot.sub_db)
         self._push_meter_value(self.bass_history, snapshot.bass_db)
         self._push_meter_value(self.low_mid_history, snapshot.low_mid_db)
+        self._push_meter_value(self.crest_factor_history, snapshot.crest_factor_db)
+        self._push_meter_value(
+            self.dynamic_range_history,
+            snapshot.dynamic_range_db if snapshot.dynamics_ready and np.isfinite(snapshot.dynamic_range_db) else np.nan,
+        )
         self._refresh_meter_curves()
         self._update_phase_safety_meter(snapshot.correlation)
 
