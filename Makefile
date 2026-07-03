@@ -15,7 +15,7 @@ PYTEST := $(VENV_BIN)/pytest
 FFMPEG_HINT := If ffmpeg is missing on macOS, run: brew install ffmpeg
 endif
 
-.PHONY: help venv install run windows_run test clean
+.PHONY: help venv install run windows_run test clean release_metadata release_macos_dmg release_windows_installer
 
 help:
 	@echo "Safe Mastering Assistant - Make targets"
@@ -29,6 +29,9 @@ help:
 	@echo "  make venv        # create .venv only"
 	@echo "  make install     # create .venv if needed and install deps"
 	@echo "  make windows_run # alias for make run"
+	@echo "  make release_metadata         # write dist/release-metadata.json"
+	@echo "  make release_macos_dmg        # build macOS app + dmg (macOS only)"
+	@echo "  make release_windows_installer # build Windows installer exe (Windows only)"
 	@echo "  make clean       # remove .venv"
 	@echo ""
 	@echo "$(FFMPEG_HINT)"
@@ -56,6 +59,15 @@ windows_run: run
 
 test: install
 	PYTHONPATH=. $(PYTEST) -q
+
+release_metadata: install
+	$(PYTHON_BIN) scripts/release.py metadata
+
+release_macos_dmg: install
+	$(PYTHON_BIN) scripts/release.py macos-dmg
+
+release_windows_installer: install
+	$(PYTHON_BIN) scripts/release.py windows-installer
 
 clean:
 	rm -rf $(VENV)

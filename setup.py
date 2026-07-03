@@ -2,9 +2,10 @@ from pathlib import Path
 
 from setuptools import setup
 
+from app.metadata import APP_NAME, APP_VERSION
+
 
 APP = ["run_app.py"]
-APP_NAME = "Half Deaf Mastering Tool"
 ICON_PATH = Path("app/ui/assets/app_icon.png")
 
 OPTIONS = {
@@ -15,8 +16,8 @@ OPTIONS = {
         "CFBundleDisplayName": APP_NAME,
         "CFBundleExecutable": APP_NAME,
         "CFBundleIdentifier": "com.halfdeaf.masteringtool",
-        "CFBundleShortVersionString": "1.0.0",
-        "CFBundleVersion": "1.0.0",
+        "CFBundleShortVersionString": APP_VERSION,
+        "CFBundleVersion": APP_VERSION,
         "LSMinimumSystemVersion": "11.0",
         "NSHighResolutionCapable": True,
         "NSMicrophoneUsageDescription": "This app needs microphone access for Live Input spectrum analysis and mastering guidance.",
@@ -37,5 +38,6 @@ OPTIONS = {
 setup(
     app=APP,
     name=APP_NAME,
+    version=APP_VERSION,
     options={"py2app": OPTIONS},
 )
