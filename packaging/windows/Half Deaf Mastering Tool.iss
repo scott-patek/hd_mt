@@ -7,8 +7,6 @@
 #ifndef OutputBaseFilename
   #define OutputBaseFilename "half-deaf-mastering-tool-setup"
 #endif
-#define SourceRoot AddBackslash(ExpandConstant('{src}')) + "..\\.."
-#define BuildOutputDir SourceRoot + "\\dist\\Half Deaf Mastering Tool"
 
 [Setup]
 AppId={{3A60531D-FF2D-48AB-B684-0F4A765B67AA}
@@ -32,7 +30,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional icons:"; Flags: unchecked
 
 [Files]
-Source: "{#BuildOutputDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\dist\Half Deaf Mastering Tool\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\Half Deaf Mastering Tool.exe"
