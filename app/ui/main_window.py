@@ -2756,7 +2756,7 @@ class MainWindow(QMainWindow):
             self._show_error(msg)
 
     def _open_support(self) -> None:
-        QDesktopServices.openUrl(QUrl("https://github.com/spatek01/halfdeaf/blob/main/README.md"))
+        QDesktopServices.openUrl(QUrl("https://github.com/spatek01/hd_mt/blob/main/README.md"))
 
     def _show_error(self, message: str) -> None:
         QMessageBox.critical(self, "Error", message)
