@@ -49,6 +49,71 @@ def clean_dirs() -> None:
     shutil.rmtree(DIST_DIR, ignore_errors=True)
 
 
+def fix_portaudio_bundling(app_bundle: Path) -> None:
+    """Fix PortAudio bundling by extracting site-packages.zip so dylib can be loaded.
+    
+    py2app zips all site-packages including sounddevice's _sounddevice_data/, but
+    dylib loading fails from inside a zip file. This function extracts site-packages.zip
+    to a directory so sounddevice can find and load the PortAudio dylib.
+    """
+    import zipfile
+    
+    resources_dir = app_bundle / "Contents" / "Resources"
+    
+    # Find site-packages.zip for the current Python version
+    zip_file = None
+    for py_ver in ["3.13", "3.12", "3.11"]:
+        candidate = resources_dir / "lib" / f"python{py_ver}" / "site-packages.zip"
+        if candidate.exists():
+            zip_file = candidate
+            break
+    
+    if not zip_file:
+        print("WARNING: site-packages.zip not found in any Python version directory")
+        return
+    
+    # Extract to site-packages directory
+    site_packages_dir = zip_file.parent / "site-packages"
+    
+    if site_packages_dir.exists():
+        shutil.rmtree(site_packages_dir)
+    
+    site_packages_dir.mkdir(parents=True, exist_ok=True)
+    
+    print(f"Extracting {zip_file.name}...")
+    with zipfile.ZipFile(zip_file, 'r') as zf:
+        zf.extractall(site_packages_dir)
+    
+    # Delete the zip file so Python uses the extracted directory instead
+    # This ensures compiled extensions (.so files) and dylibs can be found
+    
+    print(f"Extracted site-packages; PortAudio dylib should now be loadable")
+    
+    # Set DYLD_LIBRARY_PATH in plist so dylib can be found at runtime
+    try:
+        import plistlib
+        plist_path = app_bundle / "Contents" / "Info.plist"
+        with open(plist_path, 'rb') as f:
+            plist = plistlib.load(f)
+        # Point to the portaudio binaries directory
+        plist['LSEnvironment'] = {'DYLD_LIBRARY_PATH': '@loader_path/../Resources/lib/python3.13/site-packages/_sounddevice_data/portaudio-binaries'}
+        with open(plist_path, 'wb') as f:
+            plistlib.dump(plist, f)
+        print("Set DYLD_LIBRARY_PATH in plist")
+    except Exception as e:
+        print(f"Warning: Could not update plist: {e}")
+    
+    # Verify PortAudio dylib exists
+    portaudio_dylib = site_packages_dir / "_sounddevice_data" / "portaudio-binaries" / "libportaudio.dylib"
+    if portaudio_dylib.exists():
+        print(f"✓ PortAudio dylib found")
+    else:
+        print(f"WARNING: PortAudio dylib not found at expected location")
+        # Check if it's in a different location
+        for dylib in site_packages_dir.rglob("libportaudio.dylib"):
+            print(f"  Found: {dylib.relative_to(site_packages_dir)}")
+
+
 def artifact_name_macos_dmg() -> str:
     return f"{APP_SLUG}-{APP_VERSION}-macos.dmg"
 
@@ -72,6 +137,23 @@ def write_metadata(path: Path) -> None:
     print(f"Wrote metadata to {path}")
 
 
+def create_macos_executable_wrapper(app_bundle: Path) -> None:
+    """Create a wrapper script for the macOS executable to set DYLD_LIBRARY_PATH."""
+    macos_dir = app_bundle / "Contents" / "MacOS"
+    original_exe = macos_dir / "Half Deaf Mastering Tool"
+    wrapper_exe = macos_dir / "Half Deaf Mastering Tool.real"
+    
+    # Rename original executable to .real
+    original_exe.rename(wrapper_exe)
+    
+    # Create wrapper script that sets DYLD_LIBRARY_PATH
+    wrapper_script = '''#!/bin/bash
+export DYLD_LIBRARY_PATH="${DYLD_LIBRARY_PATH:+$DYLD_LIBRARY_PATH:}$(cd "$(dirname "$0")" && pwd)/../Resources/lib/python3.13/site-packages/_sounddevice_data/portaudio-binaries"
+exec "$(dirname "$0")/Half Deaf Mastering Tool.real" "$@"
+'''
+    original_exe.write_text(wrapper_script)
+    original_exe.chmod(0o755)
+    print("Created executable wrapper with DYLD_LIBRARY_PATH")
 def build_macos_dmg() -> Path:
     if platform.system() != "Darwin":
         raise ReleaseError("macos-dmg can only run on macOS")
@@ -84,6 +166,14 @@ def build_macos_dmg() -> Path:
     app_bundle = DIST_DIR / f"{APP_NAME}.app"
     if not app_bundle.exists():
         raise ReleaseError(f"Expected app bundle not found: {app_bundle}")
+
+    # Post-build: Copy PortAudio dylib from sounddevice so it can be loaded at runtime
+    # (not from inside a zip file, which would fail)
+    fix_portaudio_bundling(app_bundle)
+    create_macos_executable_wrapper(app_bundle)
+
+    # Ensure filesystem changes are flushed before DMG creation (wrapper must be included in DMG)
+    run(["sync"])
 
     dmg_path = DIST_DIR / artifact_name_macos_dmg()
     if dmg_path.exists():
@@ -201,3 +291,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+

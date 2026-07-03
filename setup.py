@@ -30,8 +30,19 @@ OPTIONS = {
         "sounddevice",
         "pydub",
         "ffmpeg",
+        "colorama",
         "app",
     ],
+    # Exclude unnecessary test data and debug symbols to reduce bundle size
+    "excludes": [
+        "scipy.tests",
+        "numpy.tests",
+        "matplotlib.tests",
+        "test",
+        "tests",
+    ],
+    "strip": True,
+    "semi_standalone": True,
 }
 
 
