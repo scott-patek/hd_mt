@@ -20,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DIST_DIR = ROOT / "dist"
 BUILD_DIR = ROOT / "build"
+WINDOWS_PACKAGING_DIR = ROOT / "packaging" / "windows"
 
 # Ensure imports resolve when script is run from CI shells.
 if str(ROOT) not in sys.path:
@@ -111,10 +112,14 @@ def build_windows_installer() -> Path:
     if platform.system() != "Windows":
         raise ReleaseError("windows-installer can only run on Windows")
 
-    ensure_tools("pyinstaller")
-    run(["pyinstaller", "--clean", "--noconfirm", "build/Half Deaf Mastering Tool-windows.spec"], cwd=ROOT)
+    spec_file = WINDOWS_PACKAGING_DIR / "Half Deaf Mastering Tool-windows.spec"
+    if not spec_file.exists():
+        raise ReleaseError(f"Missing PyInstaller spec: {spec_file}")
 
-    installer_script = ROOT / "build" / "Half Deaf Mastering Tool.iss"
+    ensure_tools("pyinstaller")
+    run(["pyinstaller", "--clean", "--noconfirm", str(spec_file)], cwd=ROOT)
+
+    installer_script = WINDOWS_PACKAGING_DIR / "Half Deaf Mastering Tool.iss"
     if not installer_script.exists():
         raise ReleaseError(f"Missing Inno Setup script: {installer_script}")
 
