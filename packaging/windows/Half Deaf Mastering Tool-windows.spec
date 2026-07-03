@@ -11,13 +11,15 @@ if str(ROOT) not in sys.path:
 from app.metadata import APP_NAME
 
 block_cipher = None
+ENTRY_SCRIPT = ROOT / 'run_app.py'
+ASSETS_DIR = ROOT / 'app' / 'ui' / 'assets'
 
 
 a = Analysis(
-    ['run_app.py'],
+    [str(ENTRY_SCRIPT)],
     pathex=[str(ROOT)],
     binaries=[],
-    datas=[('app/ui/assets', 'app/ui/assets')],
+    datas=[(str(ASSETS_DIR), 'app/ui/assets')],
     hiddenimports=['sounddevice', 'soundfile', 'scipy', 'pyqtgraph'],
     hookspath=[],
     hooksconfig={},
@@ -50,7 +52,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='app/ui/assets/app_icon.png',
+    icon=str(ASSETS_DIR / 'app_icon.png'),
 )
 
 coll = COLLECT(
