@@ -134,13 +134,19 @@ def build_windows_installer() -> Path:
             str(installer_script),
             f"/DMyAppVersion={APP_VERSION}",
             f"/DOutputBaseFilename={out_base}",
+            f"/O{DIST_DIR}",
         ],
         cwd=ROOT,
     )
 
-    installer_path = DIST_DIR / f"{out_base}.exe"
-    if not installer_path.exists():
-        raise ReleaseError(f"Expected installer not found: {installer_path}")
+    installer_candidates = [
+        DIST_DIR / f"{out_base}.exe",
+        WINDOWS_PACKAGING_DIR / "dist" / f"{out_base}.exe",
+    ]
+    installer_path = next((p for p in installer_candidates if p.exists()), None)
+    if installer_path is None:
+        candidate_text = ", ".join(str(p) for p in installer_candidates)
+        raise ReleaseError(f"Expected installer not found. Looked in: {candidate_text}")
 
     print(f"Built {installer_path}")
     return installer_path
