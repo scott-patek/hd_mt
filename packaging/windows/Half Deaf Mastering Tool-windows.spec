@@ -3,7 +3,8 @@
 from pathlib import Path
 import sys
 
-ROOT = Path(__file__).resolve().parents[2]
+# PyInstaller executes spec files via exec(), where __file__ is not guaranteed.
+ROOT = Path.cwd()
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
