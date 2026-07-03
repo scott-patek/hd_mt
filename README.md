@@ -2,6 +2,18 @@
 
 Python desktop app for objective mastering guidance with strong low-end safety checks.
 
+## Website
+
+Project site (GitHub Pages):
+
+- https://scott-patek.github.io/hd_mt/
+- Source for site content: `docs/index.html`
+
+## License and Security
+
+- License: MIT ([LICENSE](LICENSE))
+- Security policy: [SECURITY.md](SECURITY.md)
+
 ## Features
 - Audio/video file loading from picker (WAV/MP3 and MP4/MOV support).
 - Real-time playback, seek, and timing.

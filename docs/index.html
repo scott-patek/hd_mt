@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Half Deaf Mastering Tool</title>
+    <meta
+      name="description"
+      content="Half Deaf Mastering Tool is a desktop app for objective mastering guidance with low-end safety checks, loudness metrics, and phase-aware analysis."
+    />
+    <link rel="icon" type="image/png" href="images/icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="scanline"></div>
+
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="Half Deaf Mastering Tool home">
+        <img src="images/icon.png" alt="Half Deaf logo" width="28" height="28" />
+        <span>HALF DEAF MASTERING TOOL</span>
+      </a>
+      <nav class="topnav" aria-label="Primary">
+        <a href="#features">Features</a>
+        <a href="#support">Support</a>
+        <a href="#requirements">Requirements</a>
+        <a href="#legal">Legal</a>
+        <a href="#download">Download</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero reveal">
+        <div class="hero-copy">
+          <p class="kicker">Version 1.0.0 · Half Deaf</p>
+          <h1>Objective mastering guidance with low-end safety built in.</h1>
+          <p>
+            Half Deaf Mastering Tool is a desktop assistant for analyzing loudness,
+            dynamics, clipping risk, stereo image, and low-end balance while you make
+            mastering decisions.
+          </p>
+          <div class="cta-row">
+            <a
+              class="btn btn-primary"
+              href="https://github.com/scott-patek/hd_mt/releases"
+              target="_blank"
+              rel="noreferrer"
+              >Get Latest Release</a
+            >
+            <a
+              class="btn btn-ghost"
+              href="https://github.com/scott-patek/hd_mt"
+              target="_blank"
+              rel="noreferrer"
+              >View Source</a
+            >
+          </div>
+          <p class="meta">macOS DMG and Windows installer builds are published on GitHub Releases.</p>
+        </div>
+
+        <figure class="hero-image">
+          <img
+            src="images/icon.png"
+            alt="Half Deaf Mastering Tool app icon"
+            loading="eager"
+          />
+          <figcaption>Built for practical mastering checks and fast feedback loops.</figcaption>
+        </figure>
+      </section>
+
+      <section id="features" class="panel reveal delayed-1">
+        <h2>Core Features</h2>
+        <ul>
+          <li>Audio and video track loading with playback, seek, and transport controls.</li>
+          <li>Spectrum analyzer and spectrogram views for rapid frequency diagnostics.</li>
+          <li>LUFS, sample peak, true peak, clipping warnings, and stereo phase/correlation checks.</li>
+          <li>Low-end coaching focused on Sub, Bass, and Low-mid safety and translation.</li>
+          <li>Reference-track A/B workflow with level matching support.</li>
+          <li>System output monitoring mode via loopback-capable input devices.</li>
+        </ul>
+      </section>
+
+      <section id="support" class="panel reveal delayed-2">
+        <h2>Support</h2>
+        <p>
+          Support is best-effort through GitHub Issues. Use the repository for bug reports,
+          feature requests, and release notes.
+        </p>
+        <div class="cta-row">
+          <a
+            class="btn btn-ghost"
+            href="https://github.com/scott-patek/hd_mt/issues"
+            target="_blank"
+            rel="noreferrer"
+            >Report an Issue</a
+          >
+        </div>
+      </section>
+
+      <section id="requirements" class="panel reveal delayed-3">
+        <h2>System Requirements</h2>
+        <p><strong>Minimum</strong></p>
+        <ul>
+          <li>macOS 11+ or Windows 10/11 (64-bit).</li>
+          <li>Python 3.11+ when running from source.</li>
+          <li>ffmpeg installed and available on PATH.</li>
+        </ul>
+        <p><strong>Recommended</strong></p>
+        <ul>
+          <li>Apple Silicon Mac or current Windows 11 x64 hardware.</li>
+          <li>Reliable audio interface and monitoring path for critical listening.</li>
+          <li>Latest official release build from GitHub Releases.</li>
+        </ul>
+      </section>
+
+      <section id="download" class="panel panel-accent reveal delayed-4">
+        <h2>Install</h2>
+        <p>
+          Download platform builds from the release page. For development workflows,
+          run from source with Python 3.11+.
+        </p>
+        <div class="cta-row">
+          <a
+            class="btn btn-primary"
+            href="https://github.com/scott-patek/hd_mt/releases"
+            target="_blank"
+            rel="noreferrer"
+            >Open Releases</a
+          >
+          <a
+            class="btn btn-ghost"
+            href="https://github.com/scott-patek/hd_mt#quick-start"
+            target="_blank"
+            rel="noreferrer"
+            >Build From Source</a
+          >
+        </div>
+      </section>
+
+      <section id="legal" class="panel reveal delayed-4">
+        <h2>Legal and Privacy</h2>
+        <p>
+          Half Deaf Mastering Tool is distributed under the MIT License and provided as is,
+          without warranty of any kind.
+        </p>
+        <p>
+          This app analyzes local audio data and can influence engineering decisions.
+          You are responsible for validating gain staging, monitoring levels, and final masters
+          before release.
+        </p>
+        <p>
+          For bug reports and release issues, use GitHub Issues. For suspected security
+          issues, email spatek01@att.net, follow SECURITY.md, and avoid public disclosure first.
+        </p>
+        <p>
+          The desktop app does not include telemetry or a cloud service.
+          Project settings remain local unless you choose to share them.
+        </p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>Copyright (c) 2026 Half Deaf</p>
+      <p>
+        <a href="https://github.com/scott-patek/hd_mt" target="_blank" rel="noreferrer"
+          >Repository</a
+        >
+        ·
+        <a href="https://github.com/scott-patek/hd_mt/issues" target="_blank" rel="noreferrer"
+          >Issues</a
+        >
+      </p>
+    </footer>
+  </body>
+</html>
