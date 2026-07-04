@@ -6,3 +6,4 @@ dist/
 .DS_Store
 entitlements.plist
 scripts/create_dmg_installer.py
+tmp-*

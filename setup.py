@@ -51,7 +51,9 @@ OPTIONS = {
         "tests",
     ],
     "strip": True,
-    "semi_standalone": True,
+    # Bundle the Python runtime so CI-built apps do not depend on a framework
+    # Python installation existing on the destination machine.
+    "semi_standalone": False,
 }
 
 

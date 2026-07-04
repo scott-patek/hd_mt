@@ -1,30 +1,34 @@
 import os
 import sys
 
-# CRITICAL: Set up paths BEFORE any imports
-# When bundled with py2app, packages are zipped. We need to:
-# 1. Use extracted site-packages directory for sounddevice (has dylib)
-# 2. Set DYLD_LIBRARY_PATH for PortAudio
+def _configure_bundled_runtime() -> None:
+    app_resources = os.path.dirname(os.path.abspath(__file__))
+    lib_dir = os.path.join(app_resources, "lib")
 
-# Get the path to extracted site-packages
-app_resources = os.path.dirname(os.path.abspath(__file__))
-if app_resources.endswith('.app/Contents/Resources'):
-    # Running as bundled app
-    site_packages_extracted = os.path.join(app_resources, "lib/python3.13/site-packages")
-    site_packages_zip = os.path.join(app_resources, "lib/python3.13/site-packages.zip")
-    
-    # Insert extracted site-packages BEFORE the zip file in sys.path
-    # This makes Python prefer the extracted directory
-    if os.path.exists(site_packages_extracted):
-        # Remove site-packages.zip from sys.path if present
-        sys.path = [p for p in sys.path if not p.endswith('site-packages.zip')]
-        # Insert extracted directory at the beginning
-        sys.path.insert(0, site_packages_extracted)
-    
-    # Set DYLD_LIBRARY_PATH for PortAudio dylib
-    portaudio_dir = os.path.join(site_packages_extracted, "_sounddevice_data/portaudio-binaries")
-    if os.path.exists(portaudio_dir):
-        os.environ["DYLD_LIBRARY_PATH"] = portaudio_dir + ":" + os.environ.get("DYLD_LIBRARY_PATH", "")
+    if not os.path.isdir(lib_dir):
+        return
+
+    python_lib_dir = None
+    for entry in sorted(os.listdir(lib_dir), reverse=True):
+        candidate = os.path.join(lib_dir, entry)
+        if entry.startswith("python3.") and os.path.isdir(candidate):
+            python_lib_dir = candidate
+            break
+
+    if not python_lib_dir:
+        return
+
+    if python_lib_dir in sys.path:
+        sys.path.remove(python_lib_dir)
+    sys.path.insert(0, python_lib_dir)
+
+    portaudio_dir = os.path.join(python_lib_dir, "_sounddevice_data", "portaudio-binaries")
+    if os.path.isdir(portaudio_dir):
+        current = os.environ.get("DYLD_LIBRARY_PATH", "")
+        os.environ["DYLD_LIBRARY_PATH"] = portaudio_dir if not current else f"{portaudio_dir}:{current}"
+
+
+_configure_bundled_runtime()
 
 from app.main import main
 
