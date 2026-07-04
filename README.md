@@ -1,13 +1,19 @@
-# Safe Mastering Assistant
+# Half Deaf Mastering Tool
+
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![Platform](https://img.shields.io/badge/platform-macOS%2011%2B%20%7C%20Windows%2010%2F11-0a7ea4.svg)](https://github.com/scott-patek/hd_mt/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](LICENSE)
 
 Python desktop app for objective mastering guidance with strong low-end safety checks.
+
+![Half Deaf Mastering Tool screenshot](docs/images/hd_mt.png)
 
 ## Website
 
 Project site (GitHub Pages):
 
 - https://scott-patek.github.io/hd_mt/
-- Source for site content: `docs/index.html`
+- Source: `docs/index.html`
 
 ## License and Security
 
@@ -27,9 +33,12 @@ Project site (GitHub Pages):
 
 ## Prerequisites
 
-**Python 3.11+** — [Download](https://www.python.org/downloads/) if needed.
+**Release installers (DMG/EXE):** macOS 11+ or Windows 10/11 (64-bit).
 
-**ffmpeg** — Install via your package manager:
+**Running from source:** Python 3.11+ — [Download](https://www.python.org/downloads/) if needed.
+
+**ffmpeg:** Required for video files (MP4/MOV/MKV/M4V) and fallback decoding of some audio files.
+Recommended for all installs. Release installers do not bundle ffmpeg, so install it on your PATH:
 
 - **macOS:** `brew install ffmpeg`
 - **Windows:** `winget install ffmpeg` (or `choco install ffmpeg`)
@@ -65,7 +74,7 @@ When you choose System Output, the app listens to a loopback-capable input inste
 
 ### macOS BlackHole setup (recommended)
 
-Use this when you want to analyze browser/app playback (YouTube, Apple Music, Spotify, etc.) in System mode.
+Use this to analyze browser/app playback in System mode.
 
 1. Install BlackHole 2ch:
 	- `brew install --cask blackhole-2ch`
@@ -104,41 +113,6 @@ pip install -r requirements.txt
 pytest tests/ -q
 ```
 
-## Versioning and Releases (GHA)
+## Deployment and versioning
 
-This repo uses a p6cc-style release model with three workflows:
-
-- `.github/workflows/version-bump.yml` (manual): updates `APP_VERSION` in `app/metadata.py` and opens a PR.
-- `.github/workflows/release-test.yml` (manual): builds prerelease DMG + Windows installer from any ref.
-- `.github/workflows/release.yml` (tag-driven): builds and publishes production releases for `vX.Y.Z` tags.
-
-### Version source of truth
-
-`APP_VERSION` in `app/metadata.py` is the canonical version for packaging and releases.
-
-### Production release flow
-
-1. Run **Version Bump** workflow with target `X.Y.Z`.
-2. Merge the generated PR.
-3. Create and push tag `vX.Y.Z` on `main`.
-4. Release workflow validates:
-	- tag format (`vX.Y.Z`)
-	- tag commit is on `main`
-	- tag version equals `APP_VERSION`
-5. Workflow publishes:
-	- `half-deaf-mastering-tool-X.Y.Z-macos.dmg`
-	- `half-deaf-mastering-tool-X.Y.Z-windows-setup.exe`
-	- `SHA256SUMS.txt`
-
-### Local release helpers
-
-```bash
-# Generate release metadata json
-make release_metadata
-
-# Build macOS app + dmg (macOS only)
-make release_macos_dmg
-
-# Build Windows installer exe (Windows only)
-make release_windows_installer
-```
+Release/versioning workflow and packaging commands now live in [deployment.md](deployment.md).
