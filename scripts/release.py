@@ -50,68 +50,76 @@ def clean_dirs() -> None:
 
 
 def fix_portaudio_bundling(app_bundle: Path) -> None:
-    """Fix PortAudio bundling by extracting site-packages.zip so dylib can be loaded.
-    
-    py2app zips all site-packages including sounddevice's _sounddevice_data/, but
-    dylib loading fails from inside a zip file. This function extracts site-packages.zip
-    to a directory so sounddevice can find and load the PortAudio dylib.
+    """Extract PortAudio assets from py2app zip archives into the filesystem.
+
+    sounddevice bundles libportaudio.dylib under _sounddevice_data/. When py2app
+    leaves that package inside python313.zip, sounddevice resolves the dylib to a
+    path inside the archive, which macOS cannot dlopen. We extract the asset
+    package into lib/pythonX.Y/ so the filesystem copy wins at runtime.
     """
     import zipfile
-    
+
     resources_dir = app_bundle / "Contents" / "Resources"
-    
-    # Find site-packages.zip for the current Python version
-    zip_file = None
+
+    zip_candidates: list[tuple[Path, Path]] = []
     for py_ver in ["3.13", "3.12", "3.11"]:
-        candidate = resources_dir / "lib" / f"python{py_ver}" / "site-packages.zip"
-        if candidate.exists():
+        lib_dir = resources_dir / "lib" / f"python{py_ver}"
+        zip_candidates.append((resources_dir / "lib" / f"python{py_ver.replace('.', '')}.zip", lib_dir))
+        zip_candidates.append((lib_dir / "site-packages.zip", lib_dir))
+
+    zip_file = None
+    extract_root = None
+    for candidate, target_dir in zip_candidates:
+        if candidate.exists() and target_dir.exists():
             zip_file = candidate
+            extract_root = target_dir
             break
-    
-    if not zip_file:
-        print("WARNING: site-packages.zip not found in any Python version directory")
+
+    if not zip_file or not extract_root:
+        print("WARNING: no py2app zip archive found for PortAudio extraction")
         return
-    
-    # Extract to site-packages directory
-    site_packages_dir = zip_file.parent / "site-packages"
-    
-    if site_packages_dir.exists():
-        shutil.rmtree(site_packages_dir)
-    
-    site_packages_dir.mkdir(parents=True, exist_ok=True)
-    
-    print(f"Extracting {zip_file.name}...")
-    with zipfile.ZipFile(zip_file, 'r') as zf:
-        zf.extractall(site_packages_dir)
-    
-    # Delete the zip file so Python uses the extracted directory instead
-    # This ensures compiled extensions (.so files) and dylibs can be found
-    
-    print(f"Extracted site-packages; PortAudio dylib should now be loadable")
-    
+
+    sounddevice_pkg_dir = extract_root / "_sounddevice_data"
+    if sounddevice_pkg_dir.exists():
+        shutil.rmtree(sounddevice_pkg_dir)
+
+    print(f"Extracting PortAudio assets from {zip_file.name}...")
+    with zipfile.ZipFile(zip_file, "r") as zf:
+        members = [name for name in zf.namelist() if name.startswith("_sounddevice_data/")]
+        if not members:
+            print("WARNING: _sounddevice_data not found in py2app zip archive")
+            return
+        zf.extractall(extract_root, members)
+
+    print(f"Extracted _sounddevice_data into {extract_root}")
+
     # Set DYLD_LIBRARY_PATH in plist so dylib can be found at runtime
     try:
         import plistlib
         plist_path = app_bundle / "Contents" / "Info.plist"
         with open(plist_path, 'rb') as f:
             plist = plistlib.load(f)
-        # Point to the portaudio binaries directory
-        plist['LSEnvironment'] = {'DYLD_LIBRARY_PATH': '@loader_path/../Resources/lib/python3.13/site-packages/_sounddevice_data/portaudio-binaries'}
+
+        portaudio_dir = extract_root / "_sounddevice_data" / "portaudio-binaries"
+        existing_env = dict(plist.get("LSEnvironment", {}))
+        existing_env["DYLD_LIBRARY_PATH"] = str(portaudio_dir)
+        plist['LSEnvironment'] = existing_env
+
         with open(plist_path, 'wb') as f:
             plistlib.dump(plist, f)
         print("Set DYLD_LIBRARY_PATH in plist")
     except Exception as e:
         print(f"Warning: Could not update plist: {e}")
-    
+
     # Verify PortAudio dylib exists
-    portaudio_dylib = site_packages_dir / "_sounddevice_data" / "portaudio-binaries" / "libportaudio.dylib"
+    portaudio_dylib = extract_root / "_sounddevice_data" / "portaudio-binaries" / "libportaudio.dylib"
     if portaudio_dylib.exists():
         print(f"✓ PortAudio dylib found")
     else:
         print(f"WARNING: PortAudio dylib not found at expected location")
         # Check if it's in a different location
-        for dylib in site_packages_dir.rglob("libportaudio.dylib"):
-            print(f"  Found: {dylib.relative_to(site_packages_dir)}")
+        for dylib in extract_root.rglob("libportaudio.dylib"):
+            print(f"  Found: {dylib.relative_to(extract_root)}")
 
 
 def artifact_name_macos_dmg() -> str:
