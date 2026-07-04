@@ -37,13 +37,15 @@
     <main id="top">
       <section class="hero reveal">
         <div class="hero-copy">
-          <p class="kicker">Version 1.0.0 · Half Deaf</p>
-          <h1>Objective mastering guidance with low-end safety built in.</h1>
+          <p class="kicker">Version 1.0.0 · Half Deaf Master Tool</p>
+          <h1>Objective mastering guidance</h1>
           <p>
             Half Deaf Mastering Tool is a desktop assistant for analyzing loudness,
             dynamics, clipping risk, stereo image, and low-end balance while you make
             mastering decisions.
           </p>
+          <p class="meta">This started as a personal mastering helper, and I am sharing it publicly for anyone who finds it useful.</p>
+     
           <div class="cta-row">
             <a
               class="btn btn-primary"
@@ -60,13 +62,12 @@
               >View Source</a
             >
           </div>
-          <p class="meta">macOS DMG and Windows installer builds are published on GitHub Releases.</p>
         </div>
 
         <figure class="hero-image">
           <img
-            src="images/icon.png"
-            alt="Half Deaf Mastering Tool app icon"
+            src="images/hd_mt.png"
+            alt="Half Deaf Mastering Tool screenshot"
             loading="eager"
           />
           <figcaption>Built for practical mastering checks and fast feedback loops.</figcaption>
@@ -106,9 +107,10 @@
         <h2>System Requirements</h2>
         <p><strong>Minimum</strong></p>
         <ul>
-          <li>macOS 11+ or Windows 10/11 (64-bit).</li>
-          <li>Python 3.11+ when running from source.</li>
-          <li>ffmpeg installed and available on PATH.</li>
+          <li>Release installers: macOS 11+ or Windows 10/11 (64-bit).</li>
+          <li>Running from source: Python 3.11+.</li>
+          <li>ffmpeg on PATH is required for video files and fallback decoding of some audio files.</li>
+          <li>Release installers do not bundle ffmpeg.</li>
         </ul>
         <p><strong>Recommended</strong></p>
         <ul>
@@ -122,7 +124,7 @@
         <h2>Install</h2>
         <p>
           Download platform builds from the release page. For development workflows,
-          run from source with Python 3.11+.
+          run from source with Python 3.11+ and ffmpeg available on PATH.
         </p>
         <div class="cta-row">
           <a
