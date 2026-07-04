@@ -21,6 +21,15 @@ OPTIONS = {
         "LSMinimumSystemVersion": "11.0",
         "NSHighResolutionCapable": True,
         "NSMicrophoneUsageDescription": "This app needs microphone access for Live Input spectrum analysis and mastering guidance.",
+        "NSDocumentsFolderUsageDescription": "This app needs access to your Documents folder.",
+        "NSDownloadsFolderUsageDescription": "This app needs access to your Downloads folder.",
+        "NSDesktopFolderUsageDescription": "This app needs access to your Desktop folder.",
+        # Entitlements for file access and audio
+        "com.apple.security.files.user-selected.read-write": True,
+        "com.apple.security.files.downloads.read-write": True,
+        "com.apple.security.device.microphone": True,
+        "com.apple.security.device.audio-input": True,
+        "com.apple.security.app-sandbox": False,
     },
     "packages": [
         "numpy",

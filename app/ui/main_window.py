@@ -1696,13 +1696,21 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(150, lambda: reassert_macos_app_identity(APP_NAME))
 
     def _open_track(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
+        from pathlib import Path
+        from .file_picker import get_open_file_name
+        
+        # Use Downloads directory as default, fall back to home directory
+        default_dir = str(Path.home() / "Downloads")
+        if not Path(default_dir).exists():
+            default_dir = str(Path.home())
+        
+        # Use custom file picker to avoid macOS sandboxing issues
+        path, _ = get_open_file_name(
             self,
             "Open Track",
-            "",
+            default_dir,
             "Media (*.wav *.mp3 *.flac *.ogg *.aiff *.aif *.m4a *.mp4 *.mov *.mkv *.m4v)",
         )
-        self._reassert_macos_identity_after_native_dialog()
         if not path:
             return
 
@@ -1719,13 +1727,21 @@ class MainWindow(QMainWindow):
         self._activate_track(track)
 
     def _open_reference(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
+        from pathlib import Path
+        from .file_picker import get_open_file_name
+        
+        # Use Downloads directory as default, fall back to home directory
+        default_dir = str(Path.home() / "Downloads")
+        if not Path(default_dir).exists():
+            default_dir = str(Path.home())
+        
+        # Use custom file picker to avoid macOS sandboxing issues
+        path, _ = get_open_file_name(
             self,
             "Open Reference Track",
-            "",
+            default_dir,
             "Audio (*.wav *.mp3 *.flac *.ogg *.aiff *.aif *.m4a)",
         )
-        self._reassert_macos_identity_after_native_dialog()
         if not path:
             return
 

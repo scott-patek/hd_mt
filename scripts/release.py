@@ -170,29 +170,50 @@ def build_macos_dmg() -> Path:
     # Post-build: Copy PortAudio dylib from sounddevice so it can be loaded at runtime
     # (not from inside a zip file, which would fail)
     fix_portaudio_bundling(app_bundle)
-    create_macos_executable_wrapper(app_bundle)
+    # Note: DYLD_LIBRARY_PATH is now set in run_app.py before sounddevice imports,
+    # so we don't need a shell wrapper anymore
 
-    # Ensure filesystem changes are flushed before DMG creation (wrapper must be included in DMG)
+    # Ad-hoc code sign the app so it can be launched with open -a
+    try:
+        run(["codesign", "-s", "-", str(app_bundle), "--deep", "--force"])
+        print("✓ App code-signed (ad-hoc)")
+    except Exception as e:
+        print(f"Warning: Could not code-sign app: {e}")
+
+    # Ensure filesystem changes are flushed before DMG creation
     run(["sync"])
 
     dmg_path = DIST_DIR / artifact_name_macos_dmg()
     if dmg_path.exists():
         dmg_path.unlink()
 
-    run(
-        [
-            "hdiutil",
-            "create",
-            "-volname",
-            APP_NAME,
-            "-srcfolder",
-            str(app_bundle),
-            "-ov",
-            "-format",
-            "UDZO",
-            str(dmg_path),
-        ]
-    )
+    # Create temporary staging directory for DMG contents (app + Applications link)
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+        
+        # Copy app to staging directory using rsync to handle symlinks properly
+        run(["rsync", "-a", str(app_bundle), str(tmpdir_path)])
+        
+        # Create Applications symlink for drag-to-install workflow
+        app_link = tmpdir_path / "Applications"
+        app_link.symlink_to("/Applications")
+        
+        # Create DMG from staging directory
+        run(
+            [
+                "hdiutil",
+                "create",
+                "-volname",
+                APP_NAME,
+                "-srcfolder",
+                str(tmpdir_path),
+                "-ov",
+                "-format",
+                "UDZO",
+                str(dmg_path),
+            ]
+        )
 
     print(f"Built {dmg_path}")
     return dmg_path
