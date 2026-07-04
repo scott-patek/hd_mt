@@ -7,3 +7,21 @@ dist/
 entitlements.plist
 scripts/create_dmg_installer.py
 tmp-*
+
+# Local environment files
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Secrets and key material
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
