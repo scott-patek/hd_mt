@@ -15,7 +15,7 @@ PYTEST := $(VENV_BIN)/pytest
 FFMPEG_HINT := If ffmpeg is missing on macOS, run: brew install ffmpeg
 endif
 
-.PHONY: help venv install run windows_run test clean release_metadata release_macos_dmg release_windows_installer
+.PHONY: help venv install run windows_run test clean release_metadata release_macos_dmg release_windows_installer audit_json
 
 help:
 	@echo "Safe Mastering Assistant - Make targets"
@@ -32,6 +32,7 @@ help:
 	@echo "  make release_metadata         # write dist/release-metadata.json"
 	@echo "  make release_macos_dmg        # build macOS app + dmg (macOS only)"
 	@echo "  make release_windows_installer # build Windows installer exe (Windows only)"
+	@echo "  make audit_json  # run pip-audit for requirements files and write JSON reports"
 	@echo "  make clean       # remove .venv"
 	@echo ""
 	@echo "$(FFMPEG_HINT)"
@@ -68,6 +69,13 @@ release_macos_dmg: install
 
 release_windows_installer: install
 	$(PYTHON_BIN) scripts/release.py windows-installer
+
+audit_json: venv
+	@test -x $(PIP) || (echo "Virtual environment is not valid. Remove $(VENV) and retry." && exit 1)
+	$(PIP) install --upgrade pip-audit
+	$(PYTHON_BIN) -m pip_audit -r requirements.txt -f json -o pip-audit-requirements.json
+	$(PYTHON_BIN) -m pip_audit -r requirements-build.txt -f json -o pip-audit-requirements-build.json
+	@echo "Wrote pip-audit-requirements.json and pip-audit-requirements-build.json"
 
 clean:
 	rm -rf $(VENV)
